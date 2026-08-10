@@ -26,7 +26,7 @@ whisper requires 16 kHz; the renderer resamples so no transcoding dependency is 
 
 ---
 
-## Spike gate — RESOLVED (GO)
+## Spike gate — RESOLVED (GO), confirmed against the real binary
 
 Verified 2026-08-09 against tag **`v1.7.4`**: `read_wav()` in `examples/common.cpp:642` handles
 `fname == "-"` by draining stdin into memory and calling `drwav_init_memory`. No disk write on that
@@ -38,6 +38,11 @@ Two requirements this imposes on the adapter:
    the process indefinitely.
 2. **Do not treat stderr output as failure.** whisper logs `read N bytes from stdin` and progress
    there on success. Only the exit code is authoritative.
+
+**Build requirement**: compile with `BUILD_SHARED_LIBS=OFF`. The default build produces a
+`whisper-cli` that cannot start without `libwhisper.so`/`libggml.so` beside it, so shipping the
+executable alone yields a broken bundle. `scripts/fetch-whisper.sh` builds static and runs the
+installed binary before declaring success.
 
 ---
 

@@ -65,7 +65,15 @@ else
   git clone --depth 1 --branch "${WHISPER_TAG}" \
     https://github.com/ggerganov/whisper.cpp.git "${BUILD_DIR}"
 
-  CMAKE_FLAGS=(-DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON)
+  # BUILD_SHARED_LIBS=OFF is essential, not an optimisation: the default build
+  # emits libwhisper.so/libggml.so and a whisper-cli that cannot start without
+  # them, so copying the executable alone yields a broken bundle.
+  CMAKE_FLAGS=(
+    -DCMAKE_BUILD_TYPE=Release
+    -DBUILD_SHARED_LIBS=OFF
+    -DWHISPER_BUILD_TESTS=OFF
+    -DWHISPER_BUILD_EXAMPLES=ON
+  )
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # Metal gives a large speedup on Apple Silicon for short capture clips.
     CMAKE_FLAGS+=(-DGGML_METAL=ON)
@@ -95,8 +103,18 @@ else
     cp "${BUILD_DIR}/build/bin/ggml-metal.metal" "${RESOURCES}/"
   fi
   chmod +x "${RESOURCES}/whisper-cli"
+
+  # Run what we just installed before declaring success. Without this the script
+  # happily reports "installed" for a binary that cannot load its libraries.
+  if ! "${RESOURCES}/whisper-cli" --help >/dev/null 2>&1; then
+    echo "ERROR: the installed whisper-cli does not run. Missing shared libraries?" >&2
+    "${RESOURCES}/whisper-cli" --help 2>&1 | head -3 >&2
+    rm -f "${RESOURCES}/whisper-cli"
+    exit 1
+  fi
+
   rm -rf "${BUILD_DIR}"
-  echo "==> Binary installed at ${RESOURCES}/whisper-cli"
+  echo "==> Binary installed and verified at ${RESOURCES}/whisper-cli"
 fi
 
 # ----------------------------------------------------------------- model ----

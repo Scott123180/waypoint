@@ -13,6 +13,10 @@ resources/
 # Packaged artifacts (produced by CI, not locally)
 release/
 
+# Scratch clone/build tree for whisper.cpp. fetch-whisper.sh removes it on
+# success, but a failed build would otherwise leave it staged for commit.
+.whisper-build/
+
 # Test output
 playwright-report/
 test-results/

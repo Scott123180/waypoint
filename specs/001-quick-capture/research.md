@@ -28,6 +28,11 @@ the buffer over IPC to the main process, and **pipe it to `whisper-cli` on stdin
 - `MediaRecorder` was rejected: it emits WebM/Opus, which whisper.cpp cannot read, and would force
   an ffmpeg dependency to transcode.
 
+**CONFIRMED EMPIRICALLY 2026-08-10** against a locally built `v1.7.4` binary: piping the WAV in
+produced `read_wav: read 48044 bytes from stdin` and exit 0, and real speech round-tripped through
+our own downsampler and WAV encoder came back transcribed verbatim. The source reading below was
+correct.
+
 **VERIFIED 2026-08-09 against tag `v1.7.4` (task T040 — spike resolved, GO).** Confirmed by reading
 `examples/common.cpp:642` in the pinned source: `read_wav()` special-cases `fname == "-"`, drains
 stdin into a `std::vector<uint8_t>` in 1 KB chunks, and initialises `dr_wav` via
@@ -41,9 +46,15 @@ Two implementation details the source makes explicit:
 - It logs `read N bytes from stdin` to **stderr**. Harmless — the adapter reads only stdout — but
   stderr must not be treated as an error signal on its own; only the exit code is authoritative.
 
-**Build prerequisite discovered during the spike**: whisper.cpp v1.7.4 builds with CMake, and
-`cmake` is **not installed** on the Linux dev machine (`g++` and `make` are). Install it before
-running `scripts/fetch-whisper.sh` locally; the GitHub Actions runners already have it.
+**Build prerequisites**: whisper.cpp v1.7.4 builds with CMake (`sudo apt install cmake` on Ubuntu;
+GitHub Actions runners already have it).
+
+**`BUILD_SHARED_LIBS=OFF` is required, not optional.** The default build emits `libwhisper.so` and
+`libggml.so`, and a `whisper-cli` that aborts at startup with `error while loading shared libraries`
+unless they sit beside it. Copying just the executable — which the first version of
+`fetch-whisper.sh` did — produces a bundle that looks fine and cannot run. The script now builds
+static and, more importantly, **executes the binary it just installed before reporting success**;
+without that check it happily printed "Binary installed" for something non-functional.
 
 **Fallback if stdin is unsupported on the pinned version**: write the WAV to a memory-backed
 filesystem rather than to durable storage — `/dev/shm` on Linux, and on macOS a per-session

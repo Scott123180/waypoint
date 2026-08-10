@@ -32,6 +32,7 @@ const RESOURCES = whisperResourcesDir({
 const BINARY = join(RESOURCES, whisperBinaryName(process.platform));
 const MODEL = join(RESOURCES, WHISPER_MODEL_FILENAME);
 const FIXTURE = resolve(__dirname, "fixtures", "sample-16k-mono.wav");
+const SPEECH_FIXTURE = resolve(__dirname, "fixtures", "speech-16k-mono.wav");
 
 const enabled = process.env["WAYPOINT_WHISPER_INTEGRATION"] === "1";
 const hasBinary = existsSync(BINARY);
@@ -70,6 +71,20 @@ describe("whisper.cpp integration (opt-in)", { skip: !enabled || !available ? wh
     // exited cleanly — the `-f -` path this whole design depends on.
     assert.equal(typeof text, "string");
     assert.ok(Date.now() - before < 180_000);
+  });
+
+  test("transcribes real speech that went through our own encoder", async () => {
+    // The fixture was produced by espeak-ng at 22050Hz and then run through
+    // downsampleToMono16k + encodeWav — exactly the path a dictated capture
+    // takes. This is the only test that proves our resampling and WAV framing
+    // produce audio whisper can actually understand; everything else asserts
+    // mechanics against a fake binary.
+    const wav = new Uint8Array(readFileSync(SPEECH_FIXTURE));
+
+    const text = (await adapter().transcribe(wav)).toLowerCase();
+
+    assert.match(text, /roofer/, `expected the spoken words back, got: ${text}`);
+    assert.match(text, /estimate/, `expected the spoken words back, got: ${text}`);
   });
 
   test("reports a missing model rather than hanging", async () => {

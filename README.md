@@ -27,6 +27,9 @@ npm install
 ./scripts/fetch-whisper.sh   # builds whisper.cpp + downloads the ~500MB model
 ```
 
+The two halves are independent — `--model-only` needs no compiler, `--binary-only`
+needs no download — so a missing toolchain never blocks the model and vice versa.
+
 `resources/` is gitignored — the binary and model are never committed.
 
 ## Commands
