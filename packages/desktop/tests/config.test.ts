@@ -26,6 +26,17 @@ describe("defaultConfig", () => {
     const cfg = defaultConfig({ home: "/home/alice", platform: "linux" });
     assert.equal(cfg.hotkey, "CommandOrControl+Shift+Space");
   });
+
+  test("points the model at the bundled resources directory", () => {
+    // The model ships inside the app; defaulting anywhere else means dictation
+    // cannot find it out of the box.
+    const cfg = defaultConfig({
+      home: "/home/alice",
+      platform: "linux",
+      resourcesDir: "/opt/waypoint/resources/whisper",
+    });
+    assert.equal(cfg.whisperModelPath, "/opt/waypoint/resources/whisper/ggml-small.en.bin");
+  });
 });
 
 describe("configFilePath", () => {

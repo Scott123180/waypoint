@@ -9,20 +9,20 @@ import { CaptureWindow } from "./capture-window";
 import { configFilePath, currentEnv, loadConfig } from "./config";
 import { registerHotkey, type Notice } from "./hotkey";
 import { registerIpc } from "./ipc";
+import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray } from "./tray";
 
 let tray: Tray | undefined;
 
-function whisperBinaryPath(): string {
-  // Packaged builds carry the binary in extraResources; dev uses the repo copy.
-  const base = app.isPackaged
-    ? join(process.resourcesPath, "whisper")
-    : join(__dirname, "..", "..", "..", "..", "..", "resources", "whisper");
-  return join(base, process.platform === "win32" ? "whisper-cli.exe" : "whisper-cli");
-}
-
 function start(): void {
-  const env = currentEnv();
+  // Binary and model both resolve from here, so they cannot drift apart.
+  const resourcesDir = whisperResourcesDir({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    mainDir: __dirname,
+  });
+
+  const env = { ...currentEnv(), resourcesDir };
   const path = process.env["WAYPOINT_CONFIG_PATH"] ?? configFilePath(env);
   const { config, problem } = loadConfig(path, env);
 
@@ -38,7 +38,7 @@ function start(): void {
   const transcription = e2e
     ? { async transcribe(): Promise<string> { return stubTranscript.value; } }
     : new WhisperAdapter({
-        binaryPath: whisperBinaryPath(),
+        binaryPath: join(resourcesDir, whisperBinaryName(process.platform)),
         modelPath: config.whisperModelPath,
       });
 

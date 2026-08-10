@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { homedir, platform as osPlatform } from "node:os";
 import { join } from "node:path";
 
+import { WHISPER_MODEL_FILENAME } from "./resources";
+
 /**
  * Configuration is a flat JSON file in the platform config directory.
  *
@@ -37,8 +39,6 @@ export interface ConfigLoadResult {
   problem?: string;
 }
 
-const MODEL_FILENAME = "ggml-small.en.bin";
-
 export function currentEnv(): ConfigEnv {
   return {
     home: homedir(),
@@ -48,11 +48,14 @@ export function currentEnv(): ConfigEnv {
 }
 
 export function defaultConfig(env: ConfigEnv): WaypointConfig {
-  const resources = env.resourcesDir ?? join(env.home, ".local", "share", "waypoint", "whisper");
+  // resourcesDir comes from whisperResourcesDir() so the model always resolves
+  // to the same place as the binary. The empty-string fallback only applies in
+  // tests that do not care about the model path.
+  const resources = env.resourcesDir ?? "";
   return {
     inboxPath: join(env.home, "waypoint", "inbox.md"),
     hotkey: "CommandOrControl+Shift+Space",
-    whisperModelPath: join(resources, MODEL_FILENAME),
+    whisperModelPath: join(resources, WHISPER_MODEL_FILENAME),
   };
 }
 

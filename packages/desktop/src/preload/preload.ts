@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 export type SubmitResponse = { ok: true; id: string } | { ok: false; error: "empty" };
 
 export interface Notice {
+  id?: string;
   level: "info" | "error";
   message: string;
   recoverableText?: string;
@@ -34,6 +35,10 @@ const api = {
 
   undo(id: string): Promise<{ ok: boolean; reason?: string }> {
     return ipcRenderer.invoke("capture:undo", id);
+  },
+
+  ackNotice(id: string): void {
+    ipcRenderer.send("capture:notice-ack", id);
   },
 
   dismiss(): void {

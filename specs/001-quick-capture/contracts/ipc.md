@@ -59,8 +59,22 @@ recoverable (see [core-api.md](core-api.md)).
 
 ### `capture:dismiss` — `send`
 
-Fire-and-forget. User closed the box (Escape) without submitting. Main hides the window and expires
-the undo window. Any in-progress text is discarded — dismiss is an explicit user choice.
+Fire-and-forget. Hides the window. Used both when the user presses Escape and when a submit
+completes. Any in-progress text is discarded — dismiss is an explicit user choice.
+
+It deliberately does **not** expire the undo window: submit closes the box through this same
+channel, so expiring here would destroy the undo window the instant it was created. The window
+expires when the next capture begins, which `submit()` handles.
+
+### `capture:notice-ack` — `send`
+
+```ts
+ackNotice(id: string): void
+```
+
+Marks a sticky notice as read. Notices carrying `recoverableText` replay on every open until
+acknowledged, because that text is the only remaining copy of a thought whose write failed —
+the box clearing itself on open must not be able to discard it.
 
 ---
 
@@ -83,6 +97,26 @@ Out-of-band notices the renderer displays without blocking input: inbox write fa
 must not stand between the user and the next thought.
 
 ---
+
+## Testing seam (accepted, env-gated)
+
+Playwright cannot deliver an OS-level global shortcut, and CI runners have no
+microphone. When `WAYPOINT_E2E=1`, the main process therefore exposes a `__waypoint`
+global with `showCapture`, `hideCapture`, `trayClick`, `isCaptureVisible`, `hotkeyRegistered`,
+`undoableId`, `undoLatest`, and `fakeDictation`.
+
+**Accepted on these conditions**, reviewed under T080:
+
+- It is gated on an environment variable, so a shipped build exposes nothing.
+- It exposes **no new capability** — every entry calls a function the hotkey, tray, or
+  IPC handlers already call. It cannot bypass a domain rule; `fakeDictation` still runs the
+  real `CaptureService.transcribe`, so the no-speech mapping and the "never write a
+  transcript" guarantee are exercised, not stubbed.
+- It substitutes only for the OS boundary (global shortcut delivery, microphone hardware),
+  which is the part a test genuinely cannot drive.
+
+If a future client needs the same access non-test, it belongs in a real contract rather than
+this seam.
 
 ## Explicitly absent channels
 

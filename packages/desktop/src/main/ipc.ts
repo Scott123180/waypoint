@@ -44,6 +44,10 @@ export function registerIpc(service: CaptureService, window: CaptureWindow): voi
     return service.undo(id);
   });
 
+  ipcMain.on("capture:notice-ack", (_event, id: string) => {
+    window.acknowledgeNotice(id);
+  });
+
   ipcMain.on("capture:dismiss", () => {
     // Deliberately does NOT expire the undo window. Submitting closes the box
     // via this same channel, and expiring here would destroy the undo window

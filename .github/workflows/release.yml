@@ -44,6 +44,8 @@ jobs:
         env:
           # Pinned so a silently changed upstream artifact cannot enter the bundle.
           MODEL_SHA256: ${{ vars.WHISPER_MODEL_SHA256 }}
+          # Fail the release rather than ship a model nobody verified.
+          REQUIRE_PINNED_MODEL: "1"
         run: ./scripts/fetch-whisper.sh
 
       - run: npm ci

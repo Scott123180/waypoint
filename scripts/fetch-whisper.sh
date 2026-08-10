@@ -12,11 +12,16 @@ WHISPER_TAG="${WHISPER_TAG:-v1.7.4}"
 MODEL_NAME="${MODEL_NAME:-ggml-small.en.bin}"
 MODEL_URL="${MODEL_URL:-https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${MODEL_NAME}}"
 
-# Pin this to the SHA-256 of the model you validated against. Leave empty on a
-# first run: the script downloads, prints the hash, and tells you to pin it.
-# An unpinned model means a silently changed upstream artifact could enter the
-# bundle, so CI MUST set this.
+# SHA-256 of the model this project has validated against. Pinning it stops a
+# silently changed upstream artifact from entering the bundle.
+#
+# TODO(waypoint): fill this in on the first successful local fetch — the script
+# prints the computed hash below. Until it is set, RELEASE builds refuse to
+# proceed (see REQUIRE_PINNED_MODEL); local development only warns.
 MODEL_SHA256="${MODEL_SHA256:-}"
+
+# Set to 1 in any build whose output ships to a user. Release CI sets it.
+REQUIRE_PINNED_MODEL="${REQUIRE_PINNED_MODEL:-0}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESOURCES="${REPO_ROOT}/resources/whisper"
@@ -79,6 +84,13 @@ fi
 
 ACTUAL_SHA="$(shasum -a 256 "${MODEL_PATH}" | awk '{print $1}')"
 if [[ -z "${MODEL_SHA256}" ]]; then
+  if [[ "${REQUIRE_PINNED_MODEL}" == "1" ]]; then
+    echo "ERROR: MODEL_SHA256 is not pinned, and this is a release build." >&2
+    echo "  Downloaded model SHA-256: ${ACTUAL_SHA}" >&2
+    echo "  Pin it in scripts/fetch-whisper.sh (or set the WHISPER_MODEL_SHA256" >&2
+    echo "  repository variable) so the bundled model is verifiable." >&2
+    exit 1
+  fi
   echo ""
   echo "WARNING: MODEL_SHA256 is not pinned."
   echo "  Downloaded model SHA-256: ${ACTUAL_SHA}"

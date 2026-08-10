@@ -8,6 +8,7 @@ directories:
 
 files:
   - dist/**/*
+  - build/trayTemplate*.png
   - package.json
   - "!dist/tests/**"
   - "!**/*.map"

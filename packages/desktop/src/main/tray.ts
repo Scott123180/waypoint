@@ -1,4 +1,6 @@
 import { Menu, Tray, nativeImage, app } from "electron";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
 
 export interface TrayActions {
   onCapture: () => void;
@@ -21,7 +23,7 @@ export interface TrayActions {
  */
 export function createTray(actions: TrayActions): Tray | undefined {
   try {
-    const tray = new Tray(nativeImage.createEmpty());
+    const tray = new Tray(trayImage());
     tray.setToolTip("Waypoint — capture a thought");
 
     const buildMenu = (): Menu =>
@@ -44,4 +46,27 @@ export function createTray(actions: TrayActions): Tray | undefined {
     console.warn("[waypoint] could not create tray icon:", err);
     return undefined;
   }
+}
+
+/**
+ * macOS treats an image named `…Template` as a template image and recolours it
+ * for light/dark menu bars. An empty image renders as a blank, unclickable-
+ * looking gap, so fall back only if the asset is genuinely missing.
+ */
+function trayImage(): Electron.NativeImage {
+  const candidates = [
+    join(__dirname, "..", "..", "..", "build", "trayTemplate.png"),
+    join(process.resourcesPath ?? "", "build", "trayTemplate.png"),
+  ];
+
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      const image = nativeImage.createFromPath(path);
+      if (!image.isEmpty()) {
+        image.setTemplateImage(true);
+        return image;
+      }
+    }
+  }
+  return nativeImage.createEmpty();
 }

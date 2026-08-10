@@ -7,6 +7,7 @@
  */
 
 interface Notice {
+  id?: string;
   level: "info" | "error";
   message: string;
   recoverableText?: string;
@@ -23,6 +24,7 @@ interface WaypointApi {
   submit(text: string, source: "typed" | "dictated"): Promise<SubmitResponse>;
   transcribe(samples: Float32Array, sampleRate: number): Promise<TranscribeResponse>;
   undo(id: string): Promise<{ ok: boolean; reason?: string }>;
+  ackNotice(id: string): void;
   dismiss(): void;
   onReset(callback: () => void): void;
   onNotice(callback: (notice: Notice) => void): void;
@@ -58,6 +60,21 @@ function showNotice(next: Notice): void {
     recoverable.className = "recoverable";
     recoverable.textContent = next.recoverableText;
     notice.appendChild(recoverable);
+
+    // Sticky: it replays on every open until the user says they have it, so
+    // closing the box cannot quietly drop the last copy of the thought.
+    if (next.id) {
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.id = "notice-dismiss";
+      dismiss.textContent = "Got it";
+      dismiss.addEventListener("click", () => {
+        window.waypoint.ackNotice(next.id!);
+        clearNotice();
+        focusInput();
+      });
+      notice.appendChild(dismiss);
+    }
   }
 
   notice.classList.add("visible");

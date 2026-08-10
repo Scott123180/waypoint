@@ -2,6 +2,7 @@ import { BrowserWindow } from "electron";
 import { join } from "node:path";
 
 import type { Notice } from "./hotkey";
+import { NoticeQueue } from "./notice-queue";
 
 const TRACE = process.env["WAYPOINT_TRACE_LATENCY"] === "1";
 
@@ -14,6 +15,7 @@ const TRACE = process.env["WAYPOINT_TRACE_LATENCY"] === "1";
  */
 export class CaptureWindow {
   private window: BrowserWindow | undefined;
+  private readonly notices = new NoticeQueue();
 
   create(): void {
     const window = new BrowserWindow({
@@ -62,6 +64,11 @@ export class CaptureWindow {
     window.show();
     window.focus();
 
+    // Replayed after the reset so the box clearing itself cannot wipe them.
+    for (const notice of this.notices.onShow()) {
+      window.webContents.send("capture:notice", notice);
+    }
+
     if (TRACE) {
       console.log(`[waypoint] trigger -> shown in ${Date.now() - started}ms`);
     }
@@ -79,8 +86,21 @@ export class CaptureWindow {
     return Boolean(window && !window.isDestroyed() && window.isVisible());
   }
 
+  /**
+   * Shows a notice, or holds it until the box is next opened.
+   *
+   * Sending straight to a hidden window would lose it, and a notice carrying
+   * recoverable text is the only remaining copy of a thought whose write failed.
+   */
   notify(notice: Notice): void {
-    this.window?.webContents.send("capture:notice", notice);
+    for (const deliverable of this.notices.push(notice, this.isVisible())) {
+      this.window?.webContents.send("capture:notice", deliverable);
+    }
+  }
+
+  /** The user has read a sticky notice; stop replaying it. */
+  acknowledgeNotice(id: string): void {
+    this.notices.acknowledge(id);
   }
 
   get browserWindow(): BrowserWindow | undefined {

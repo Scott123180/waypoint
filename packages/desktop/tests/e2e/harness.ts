@@ -33,10 +33,20 @@ export interface Harness {
  * calls. That the accelerator is actually wired to it is covered separately by
  * the hotkey unit test.
  */
-export async function launch(options: { hotkey?: string } = {}): Promise<Harness> {
+export async function launch(
+  options: { hotkey?: string; unwritableInbox?: boolean } = {},
+): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "waypoint-e2e-"));
-  const inboxPath = join(dir, "inbox.md");
+  let inboxPath = join(dir, "inbox.md");
   const configPath = join(dir, "config.json");
+
+  if (options.unwritableInbox) {
+    // Put the inbox "inside" a regular file so creating its parent directory
+    // fails, forcing a real InboxWriteError rather than a simulated one.
+    const blocker = join(dir, "blocker");
+    writeFileSync(blocker, "not a directory");
+    inboxPath = join(blocker, "inbox.md");
+  }
 
   writeFileSync(
     configPath,
