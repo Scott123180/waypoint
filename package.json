@@ -23,7 +23,7 @@
     "test:e2e": "npm run build && playwright test",
     "test:whisper": "npm run build && WAYPOINT_WHISPER_INTEGRATION=1 node --test \"packages/desktop/dist/tests/whisper-integration.test.js\"",
     "dev": "npm run build && electron packages/desktop/dist/src/main/main.js --no-sandbox",
-    "package": "npm run build && electron-builder --config packages/desktop/electron-builder.yml --publish never"
+    "package": "npm run build && electron-builder --projectDir packages/desktop --config electron-builder.yml --config.electronVersion=$(node -p \"require('electron/package.json').version\") --publish never"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

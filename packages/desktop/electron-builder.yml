@@ -2,6 +2,17 @@ appId: dev.waypoint.app
 productName: Waypoint
 copyright: Waypoint
 
+# Without this the executable is named after the package (`@waypoint/desktop`),
+# producing a binary called `@waypointdesktop` — a leading `@` that the AppImage
+# launcher cannot exec.
+executableName: waypoint
+
+# No native modules anywhere in the tree, so there is nothing to rebuild. The
+# step is disabled because it runs `npm install --production` inside the app
+# directory, which in an npm workspace prunes the hoisted devDependencies — up
+# to and including electron-builder's own app-builder binary, mid-build.
+npmRebuild: false
+
 directories:
   output: ../../release
   buildResources: build
@@ -12,6 +23,8 @@ files:
   - package.json
   - "!dist/tests/**"
   - "!**/*.map"
+  # The workspace symlink pulls in core's compiled tests too.
+  - "!node_modules/@waypoint/core/dist/tests/**"
 
 extraMetadata:
   main: dist/src/main/main.js

@@ -76,7 +76,11 @@ else
   )
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # Metal gives a large speedup on Apple Silicon for short capture clips.
-    CMAKE_FLAGS+=(-DGGML_METAL=ON)
+    # EMBED_LIBRARY compiles the shaders into the binary rather than loading
+    # ggml-metal.metal from beside it at runtime — inside an .app bundle the
+    # relative lookup is exactly the kind of thing that works on the build
+    # machine and fails on the user's.
+    CMAKE_FLAGS+=(-DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON)
   fi
 
   cmake -S "${BUILD_DIR}" -B "${BUILD_DIR}/build" "${CMAKE_FLAGS[@]}"

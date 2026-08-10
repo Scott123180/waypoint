@@ -52,9 +52,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
+      # Deliberately the same `npm run package` a developer runs, rather than a
+      # separate invocation: the previous CI-only command pointed at a config
+      # path that could not resolve, and nothing caught it because no one ran it.
       - name: Package
-        run: npx electron-builder --config packages/desktop/electron-builder.yml --publish never
-        working-directory: packages/desktop
+        run: npm run package
 
       - uses: actions/upload-artifact@v4
         with:

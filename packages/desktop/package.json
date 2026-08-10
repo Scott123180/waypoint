@@ -5,6 +5,7 @@
   "description": "Electron thin client. Contains no domain logic.",
   "main": "dist/src/main/main.js",
   "license": "MIT",
+  "author": "Waypoint",
   "dependencies": {
     "@waypoint/core": "*"
   }
