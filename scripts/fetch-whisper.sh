@@ -15,13 +15,32 @@ MODEL_URL="${MODEL_URL:-https://huggingface.co/ggerganov/whisper.cpp/resolve/mai
 # SHA-256 of the model this project has validated against. Pinning it stops a
 # silently changed upstream artifact from entering the bundle.
 #
-# TODO(waypoint): fill this in on the first successful local fetch — the script
-# prints the computed hash below. Until it is set, RELEASE builds refuse to
-# proceed (see REQUIRE_PINNED_MODEL); local development only warns.
-MODEL_SHA256="${MODEL_SHA256:-}"
+# Verified 2026-08-09: this value matches the `lfs.oid` Hugging Face publishes
+# for ggml-small.en.bin (size 487614201), cross-checked against the API rather
+# than simply trusting whatever one download happened to produce.
+MODEL_SHA256="${MODEL_SHA256:-c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d}"
 
 # Set to 1 in any build whose output ships to a user. Release CI sets it.
 REQUIRE_PINNED_MODEL="${REQUIRE_PINNED_MODEL:-0}"
+
+# The two halves are independent on purpose: the model is a plain download, and
+# only the binary needs a C++ toolchain. Skipping one must never block the other.
+#   ./scripts/fetch-whisper.sh --model-only    # no cmake required
+#   ./scripts/fetch-whisper.sh --binary-only
+DO_BINARY=1
+DO_MODEL=1
+for arg in "$@"; do
+  case "${arg}" in
+    --model-only)  DO_BINARY=0 ;;
+    --binary-only) DO_MODEL=0 ;;
+    -h|--help)
+      echo "usage: fetch-whisper.sh [--model-only|--binary-only]"
+      exit 0 ;;
+    *)
+      echo "unknown option: ${arg}" >&2
+      exit 2 ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESOURCES="${REPO_ROOT}/resources/whisper"
@@ -30,7 +49,15 @@ BUILD_DIR="${REPO_ROOT}/.whisper-build"
 mkdir -p "${RESOURCES}"
 
 # ---------------------------------------------------------------- binary ----
-if [[ -x "${RESOURCES}/whisper-cli" ]]; then
+if [[ "${DO_BINARY}" == "0" ]]; then
+  echo "==> Skipping binary build (--model-only)"
+elif ! command -v cmake >/dev/null 2>&1; then
+  # Report and carry on to the model rather than aborting: a missing toolchain
+  # should not also deny you the download.
+  echo "WARNING: cmake not found, skipping the whisper-cli build." >&2
+  echo "  Install it (e.g. sudo apt install cmake) and re-run to build the binary." >&2
+  BINARY_SKIPPED=1
+elif [[ -x "${RESOURCES}/whisper-cli" ]]; then
   echo "==> whisper-cli already present, skipping build"
 else
   echo "==> Building whisper.cpp ${WHISPER_TAG}"
@@ -73,6 +100,16 @@ else
 fi
 
 # ----------------------------------------------------------------- model ----
+if [[ "${DO_MODEL}" == "0" ]]; then
+  echo "==> Skipping model download (--binary-only)"
+  if [[ "${BINARY_SKIPPED:-0}" == "1" ]]; then
+  echo "==> Model ready, but whisper-cli is still missing — voice capture stays disabled."
+else
+  echo "==> resources/whisper ready"
+fi
+  exit 0
+fi
+
 MODEL_PATH="${RESOURCES}/${MODEL_NAME}"
 if [[ -f "${MODEL_PATH}" ]]; then
   echo "==> ${MODEL_NAME} already present, skipping download"
@@ -106,4 +143,8 @@ else
   echo "==> Model checksum verified"
 fi
 
-echo "==> resources/whisper ready"
+if [[ "${BINARY_SKIPPED:-0}" == "1" ]]; then
+  echo "==> Model ready, but whisper-cli is still missing — voice capture stays disabled."
+else
+  echo "==> resources/whisper ready"
+fi

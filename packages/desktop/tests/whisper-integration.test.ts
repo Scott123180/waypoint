@@ -34,11 +34,25 @@ const MODEL = join(RESOURCES, WHISPER_MODEL_FILENAME);
 const FIXTURE = resolve(__dirname, "fixtures", "sample-16k-mono.wav");
 
 const enabled = process.env["WAYPOINT_WHISPER_INTEGRATION"] === "1";
-const available = existsSync(BINARY) && existsSync(MODEL);
+const hasBinary = existsSync(BINARY);
+const hasModel = existsSync(MODEL);
+const available = hasBinary && hasModel;
 
-const why = !enabled
-  ? "set WAYPOINT_WHISPER_INTEGRATION=1 to run"
-  : `whisper binary or model missing under ${RESOURCES}; run ./scripts/fetch-whisper.sh`;
+// Name the missing piece: they are fetched independently, and needing cmake for
+// the binary is a very different fix from needing a 500MB download.
+function missingReason(): string {
+  if (!hasBinary && !hasModel) {
+    return `no binary or model in ${RESOURCES}; run ./scripts/fetch-whisper.sh`;
+  }
+  if (!hasBinary) {
+    return `model present but whisper-cli missing in ${RESOURCES}; ` +
+      `needs cmake, then ./scripts/fetch-whisper.sh --binary-only`;
+  }
+  return `binary present but model missing in ${RESOURCES}; ` +
+    `run ./scripts/fetch-whisper.sh --model-only`;
+}
+
+const why = !enabled ? "set WAYPOINT_WHISPER_INTEGRATION=1 to run" : missingReason();
 
 describe("whisper.cpp integration (opt-in)", { skip: !enabled || !available ? why : false }, () => {
   function adapter(): WhisperAdapter {
