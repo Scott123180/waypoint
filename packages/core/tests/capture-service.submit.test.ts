@@ -1,3 +1,7 @@
+// Fixed zone so the local-offset assertion below is deterministic on any
+// machine. Without it this passes in New York and fails on a UTC CI runner.
+process.env.TZ = "America/New_York";
+
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
