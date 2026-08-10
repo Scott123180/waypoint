@@ -79,6 +79,88 @@
         color: var(--error);
         border-color: var(--error);
       }
+      #dictate-button:disabled { opacity: 0.55; cursor: default; }
+
+      /* ----------------------------------------------------- dictation state -- */
+      /*
+        Recording and transcribing must not merely differ in wording: a dimmed
+        button was the entire distinction before, and it read as a hang.
+        Recording gets a live, audio-driven meter; transcribing gets continuous
+        motion and no number, because whisper cannot report true progress.
+      */
+      #status {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      #status[data-state="acquiring"],
+      #status[data-state="recording"],
+      #status[data-state="transcribing"] { display: flex; }
+      /* The hint and the status share one slot; whichever applies is shown. */
+      body:has(#status[data-state="acquiring"]) #hint,
+      body:has(#status[data-state="recording"]) #hint,
+      body:has(#status[data-state="transcribing"]) #hint { display: none; }
+
+      #status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex: none;
+      }
+      #status[data-state="recording"] #status-dot {
+        background: var(--error);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.25; }
+      }
+
+      #status[data-state="recording"] #status-label { color: var(--error); }
+
+      #level-meter { display: none; align-items: flex-end; gap: 2px; height: 12px; }
+      #status[data-state="recording"] #level-meter { display: flex; }
+      #level-meter i {
+        width: 3px;
+        height: 100%;
+        border-radius: 1px;
+        background: var(--border);
+        transform-origin: bottom;
+        transform: scaleY(0.28);
+        transition: transform 80ms linear, background-color 80ms linear;
+      }
+      #level-meter i.lit { background: var(--error); }
+
+      #elapsed { display: none; font-variant-numeric: tabular-nums; color: var(--muted); }
+      #status[data-state="recording"] #elapsed { display: inline; }
+
+      /* Indeterminate by design — a percentage here would be invented. */
+      #working { display: none; width: 92px; height: 3px; border-radius: 2px; background: var(--border); overflow: hidden; position: relative; }
+      #status[data-state="transcribing"] #working { display: inline-block; }
+      #working::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        border-radius: 2px;
+        background: var(--fg);
+        animation: slide 1.1s ease-in-out infinite;
+      }
+      @keyframes slide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        /* Motion is the signal for users who want it; for users who don't, the
+           states still differ by wording, colour, and the meter itself. */
+        #status[data-state="recording"] #status-dot { animation: none; }
+        #working::after { animation: none; width: 100%; opacity: 0.45; }
+        #level-meter i { transition: none; }
+      }
       #undo-button {
         font: inherit;
         font-size: 12px;
@@ -118,7 +200,21 @@
       spellcheck="false"
     ></textarea>
     <footer>
-      <span>Enter to save &middot; Shift+Enter for a new line &middot; Esc to dismiss</span>
+      <span id="hint">Enter to save &middot; Shift+Enter for a new line &middot; Esc to dismiss</span>
+      <!--
+        One region, three states. The elapsed timer and the level meter are
+        aria-hidden so a screen reader announces "Listening" once rather than
+        re-announcing every tick of the clock.
+      -->
+      <div id="status" role="status" aria-live="polite" data-state="idle" data-level="0">
+        <span id="status-dot" aria-hidden="true"></span>
+        <span id="status-label"></span>
+        <span id="level-meter" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </span>
+        <span id="elapsed" aria-hidden="true"></span>
+        <span id="working" aria-hidden="true"></span>
+      </div>
       <button id="dictate-button" type="button" aria-pressed="false">Dictate</button>
     </footer>
     <div id="notice" role="status" aria-live="polite"></div>

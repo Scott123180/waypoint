@@ -7,7 +7,7 @@ import { FsInboxStore } from "./adapters/fs-inbox-store";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
 import { configFilePath, currentEnv, loadConfig } from "./config";
-import { registerHotkey, type Notice } from "./hotkey";
+import { registerHotkeys, type Notice } from "./hotkey";
 import { registerIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray } from "./tray";
@@ -34,9 +34,19 @@ function start(): void {
   // Under E2E the whisper *subprocess* is stubbed — CI has no microphone and no
   // 500MB model — while the real core rules and renderer path still run. The
   // subprocess wiring itself is covered by the fake-binary contract tests.
-  const stubTranscript = { value: "" };
+  const stubTranscript = { value: "", delayMs: 0 };
   const transcription = e2e
-    ? { async transcribe(): Promise<string> { return stubTranscript.value; } }
+    ? {
+        async transcribe(): Promise<string> {
+          // The delay exists so the transcribing state is observable at all: a
+          // stub that returns instantly cannot show that a real 3-5s wait is
+          // being reported to the user.
+          if (stubTranscript.delayMs > 0) {
+            await new Promise((r) => setTimeout(r, stubTranscript.delayMs));
+          }
+          return stubTranscript.value;
+        },
+      }
     : new WhisperAdapter({
         binaryPath: join(resourcesDir, whisperBinaryName(process.platform)),
         modelPath: config.whisperModelPath,
@@ -56,7 +66,8 @@ function start(): void {
   captureWindow.create();
   registerIpc(service, captureWindow);
 
-  const showCapture = (): void => captureWindow.show();
+  const showCapture = (): void => captureWindow.show("type");
+  const showCaptureDictating = (): void => captureWindow.show("dictate");
 
   const undoLatest = async (): Promise<{ ok: boolean; reason?: string }> => {
     const id = service.undoableId();
@@ -80,9 +91,15 @@ function start(): void {
     return outcome;
   };
 
-  const hotkey = registerHotkey(config.hotkey, showCapture, globalShortcut, emitNotice);
+  const hotkeys = registerHotkeys(
+    { capture: config.hotkey, dictate: config.dictateHotkey },
+    { onCapture: showCapture, onDictate: showCaptureDictating },
+    globalShortcut,
+    emitNotice,
+  );
   tray = createTray({
     onCapture: showCapture,
+    onDictate: showCaptureDictating,
     onUndo: () => void undoLatest(),
     canUndo: () => service.undoableId() !== undefined,
   });
@@ -114,12 +131,20 @@ function start(): void {
     // suite drives the same functions the hotkey and tray handlers call.
     (globalThis as Record<string, unknown>)["__waypoint"] = {
       showCapture,
+      showCaptureDictating,
       hideCapture: () => captureWindow.hide(),
       trayClick: showCapture,
       isCaptureVisible: () => captureWindow.isVisible(),
-      hotkeyRegistered: () => hotkey.registered,
+      hotkeyRegistered: () => hotkeys.capture,
+      dictateHotkeyRegistered: () => hotkeys.dictate,
       undoableId: () => service.undoableId(),
       undoLatest,
+      setStubTranscript: (text: string) => {
+        stubTranscript.value = text;
+      },
+      setStubTranscriptionDelay: (ms: number) => {
+        stubTranscript.delayMs = ms;
+      },
       // CI has no microphone, so the suite feeds a canned result through the
       // real transcribe → insert path instead of capturing audio.
       fakeDictation: async (input: { text?: string; error?: string }) => {

@@ -6,6 +6,9 @@ import { NoticeQueue } from "./notice-queue";
 
 const TRACE = process.env["WAYPOINT_TRACE_LATENCY"] === "1";
 
+/** Which hotkey opened the box: one starts typing, the other starts listening. */
+export type CaptureMode = "type" | "dictate";
+
 /**
  * The capture surface.
  *
@@ -48,19 +51,25 @@ export class CaptureWindow {
   }
 
   /**
-   * Shows the box, or does nothing if it is already open.
+   * Shows the box, or brings it forward without disturbing it if already open.
    *
-   * The no-op is the point: a second hotkey press while the user is midway
-   * through typing must not clear what they have written (FR-003a).
+   * The no-op on an open box is the point: a second hotkey press while the user
+   * is midway through typing must not clear what they have written (FR-003a).
+   * Dictation is the one thing that may still be started on an already-open
+   * box, because recording neither clears nor replaces in-progress input.
    */
-  show(): void {
+  show(mode: CaptureMode = "type"): void {
     const window = this.window;
     if (!window || window.isDestroyed()) return;
-    if (window.isVisible()) return;
+
+    if (window.isVisible()) {
+      if (mode === "dictate") window.webContents.send("capture:start-dictation");
+      return;
+    }
 
     const started = TRACE ? Date.now() : 0;
 
-    window.webContents.send("capture:reset");
+    window.webContents.send("capture:reset", mode);
     window.show();
     window.focus();
 

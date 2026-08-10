@@ -4,6 +4,8 @@ import { existsSync } from "node:fs";
 
 export interface TrayActions {
   onCapture: () => void;
+  /** Opens the box already dictating, the same as the dictate hotkey. */
+  onDictate: () => void;
   /** Undoes the most recent dictated capture, if one is still undoable. */
   onUndo: () => void;
   /** Whether an undoable capture currently exists. */
@@ -29,6 +31,7 @@ export function createTray(actions: TrayActions): Tray | undefined {
     const buildMenu = (): Menu =>
       Menu.buildFromTemplate([
         { label: "Capture a thought", click: actions.onCapture },
+        { label: "Dictate a thought", click: actions.onDictate },
         { label: "Undo last capture", click: actions.onUndo, enabled: actions.canUndo() },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },

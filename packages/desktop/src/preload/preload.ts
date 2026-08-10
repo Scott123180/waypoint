@@ -45,8 +45,13 @@ const api = {
     ipcRenderer.send("capture:dismiss");
   },
 
-  onReset(callback: () => void): void {
-    ipcRenderer.on("capture:reset", () => callback());
+  onReset(callback: (mode: "type" | "dictate") => void): void {
+    ipcRenderer.on("capture:reset", (_event, mode: "type" | "dictate" = "type") => callback(mode));
+  },
+
+  /** Dictation asked for on a box that was already open, so nothing is reset. */
+  onStartDictation(callback: () => void): void {
+    ipcRenderer.on("capture:start-dictation", () => callback());
   },
 
   onNotice(callback: (notice: Notice) => void): void {

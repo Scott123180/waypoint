@@ -26,10 +26,13 @@ interface WaypointApi {
   undo(id: string): Promise<{ ok: boolean; reason?: string }>;
   ackNotice(id: string): void;
   dismiss(): void;
-  onReset(callback: () => void): void;
+  onReset(callback: (mode: CaptureMode) => void): void;
+  onStartDictation(callback: () => void): void;
   onNotice(callback: (notice: Notice) => void): void;
   onFakeDictation(callback: (result: TranscribeResponse) => void): void;
 }
+
+type CaptureMode = "type" | "dictate";
 
 declare global {
   interface Window {
@@ -87,6 +90,101 @@ function reset(): void {
   focusInput();
 }
 
+/* --------------------------------------------------------- dictation state -- */
+
+/**
+ * The three states dictation moves through, kept visible at all times.
+ *
+ * Before this existed, recording and transcribing were distinguished only by a
+ * dimmed button, and a transcription that takes 3-5 seconds read as a hang.
+ */
+type DictationState = "idle" | "acquiring" | "recording" | "transcribing";
+
+const status = document.getElementById("status") as HTMLDivElement;
+const statusLabel = document.getElementById("status-label") as HTMLSpanElement;
+const levelMeter = document.getElementById("level-meter") as HTMLSpanElement;
+const levelBars = Array.from(levelMeter.querySelectorAll("i"));
+const elapsed = document.getElementById("elapsed") as HTMLSpanElement;
+
+const LABELS: Record<DictationState, string> = {
+  idle: "",
+  acquiring: "Starting microphone…",
+  recording: "Listening",
+  transcribing: "Transcribing…",
+};
+
+let state: DictationState = "idle";
+let elapsedTimer: number | undefined;
+
+function setState(next: DictationState): void {
+  state = next;
+  status.dataset["state"] = next;
+  statusLabel.textContent = LABELS[next];
+
+  if (next === "recording") {
+    status.dataset["startedAt"] = String(Date.now());
+    startElapsed();
+  } else {
+    stopElapsed();
+  }
+
+  if (next !== "recording") setLevel(0);
+  // Only transcription is a genuine wait; recording ends when the user says so.
+  dictateButton.disabled = next === "transcribing" || next === "acquiring";
+  dictateButton.setAttribute("aria-pressed", String(next === "recording"));
+  dictateButton.textContent = next === "recording" ? "Stop" : "Dictate";
+}
+
+function startElapsed(): void {
+  const started = Date.now();
+  const tick = (): void => {
+    const seconds = Math.floor((Date.now() - started) / 1000);
+    elapsed.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+  tick();
+  elapsedTimer = window.setInterval(tick, 250);
+}
+
+function stopElapsed(): void {
+  if (elapsedTimer !== undefined) window.clearInterval(elapsedTimer);
+  elapsedTimer = undefined;
+  elapsed.textContent = "";
+}
+
+/** Paints the meter and publishes the level for tests to observe. */
+function setLevel(level: number): void {
+  status.dataset["level"] = level.toFixed(3);
+  const lit = Math.round(level * levelBars.length);
+  levelBars.forEach((bar, index) => {
+    const on = index < lit;
+    bar.classList.toggle("lit", on);
+    bar.style.transform = `scaleY(${on ? 0.28 + 0.72 * ((index + 1) / levelBars.length) : 0.28})`;
+  });
+}
+
+let smoothed = 0;
+
+/**
+ * Turns a block of samples into a 0..1 meter reading.
+ *
+ * Mapped through decibels rather than raw amplitude because speech sits low in
+ * linear terms — a linear meter barely twitches at conversational volume and so
+ * fails at the one job it has, which is showing that the microphone is live.
+ * Attack is instant and release is gradual, so a peak is legible rather than a
+ * flicker.
+ */
+function meterLevel(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i]! * samples[i]!;
+  const rms = Math.sqrt(sum / samples.length);
+
+  const db = 20 * Math.log10(rms + 1e-9);
+  const normalized = Math.min(1, Math.max(0, (db + 60) / 60));
+
+  smoothed = normalized > smoothed ? normalized : smoothed * 0.8 + normalized * 0.2;
+  return smoothed;
+}
+
 
 /** Text currently in the box came from dictation and has not been retyped. */
 let hasTranscript = false;
@@ -125,6 +223,10 @@ input.addEventListener("keydown", (event: KeyboardEvent) => {
 
   if (event.key === "Escape") {
     event.preventDefault();
+    // Dismissing must also release the microphone; a hidden box that is still
+    // recording is both a privacy problem and a stuck indicator on reopen.
+    if (recording) teardown();
+    setState("idle");
     input.value = "";
     clearNotice();
     window.waypoint.dismiss();
@@ -180,11 +282,6 @@ interface Recording {
 
 let recording: Recording | undefined;
 
-function setDictating(active: boolean): void {
-  dictateButton.setAttribute("aria-pressed", String(active));
-  dictateButton.textContent = active ? "Stop" : "Dictate";
-}
-
 /** Tears down the audio graph and releases the microphone. */
 function teardown(): Float32Array[] {
   if (!recording) return [];
@@ -196,15 +293,25 @@ function teardown(): Float32Array[] {
   void context.close();
   for (const track of stream.getTracks()) track.stop();
 
-  setDictating(false);
+  smoothed = 0;
   return chunks;
 }
 
 async function startDictation(): Promise<void> {
+  // Idempotent: a second dictate hotkey press mid-recording must be inert
+  // rather than discarding what has been said so far.
+  if (state !== "idle") return;
+
+  setState("acquiring");
+
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
+    // Failing back to idle matters as much as the message: leaving the box
+    // showing "Listening" at a microphone that never opened is the exact
+    // confusion this state machine exists to prevent.
+    setState("idle");
     showNotice({
       level: "error",
       message: "Microphone unavailable. Check permissions, or type your thought instead.",
@@ -219,15 +326,20 @@ async function startDictation(): Promise<void> {
   const chunks: Float32Array[] = [];
 
   processor.onaudioprocess = (event) => {
+    const samples = event.inputBuffer.getChannelData(0);
+    // The meter is driven from the same samples that will be transcribed, so a
+    // moving meter is direct evidence the transcriber is getting audio.
+    setLevel(meterLevel(samples));
     // Copied because the underlying buffer is reused by the audio thread.
-    chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+    chunks.push(new Float32Array(samples));
   };
 
   source.connect(processor);
   processor.connect(context.destination);
 
   recording = { stream, context, processor, source, chunks };
-  setDictating(true);
+  setState("recording");
+  focusInput();
 
   // If the microphone disappears mid-recording, end cleanly rather than
   // leaving the button stuck in a recording state.
@@ -235,6 +347,7 @@ async function startDictation(): Promise<void> {
     track.addEventListener("ended", () => {
       if (!recording) return;
       teardown();
+      setState("idle");
       showNotice({ level: "error", message: "Microphone disconnected. Nothing was captured." });
       focusInput();
     });
@@ -242,12 +355,15 @@ async function startDictation(): Promise<void> {
 }
 
 async function stopDictation(): Promise<void> {
+  if (state !== "recording") return;
+
   const sampleRate = recording?.context.sampleRate ?? 48_000;
   const chunks = teardown();
 
   let total = 0;
   for (const chunk of chunks) total += chunk.length;
   if (total === 0) {
+    setState("idle");
     applyTranscription({ status: "no-speech" });
     return;
   }
@@ -262,24 +378,37 @@ async function stopDictation(): Promise<void> {
   // exists only in memory and only for as long as transcription needs it.
   chunks.length = 0;
 
-  dictateButton.disabled = true;
+  setState("transcribing");
   try {
     applyTranscription(await window.waypoint.transcribe(samples, sampleRate));
   } finally {
-    dictateButton.disabled = false;
+    // Returning to idle in `finally` so a thrown transcription cannot strand
+    // the box showing "Transcribing…" forever.
+    setState("idle");
   }
 }
 
 dictateButton.addEventListener("click", () => {
-  void (recording ? stopDictation() : startDictation());
+  void (state === "recording" ? stopDictation() : startDictation());
 });
 
-window.waypoint.onReset(() => {
+window.waypoint.onReset((mode) => {
   if (recording) teardown();
+  setState("idle");
   reset();
+  if (mode === "dictate") void startDictation();
 });
+
+// Dictation asked for on a box that is already open: start listening without
+// touching what the user has already typed (FR-003a).
+window.waypoint.onStartDictation(() => {
+  void startDictation();
+});
+
 window.waypoint.onNotice(showNotice);
 window.waypoint.onFakeDictation(applyTranscription);
+
+setState("idle");
 
 // The window is reused across captures, so re-focus whenever it comes forward.
 window.addEventListener("focus", focusInput);

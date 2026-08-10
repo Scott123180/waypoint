@@ -9,7 +9,7 @@ Governed by [the constitution](.specify/memory/constitution.md); planned in
 ## Status
 
 Feature 1 (quick capture) is implemented: text and voice capture, transcript
-review, and undo. 134 unit tests and 32 end-to-end tests.
+review, and undo. 160 unit tests and 50 end-to-end tests.
 
 ## Requirements
 
@@ -55,19 +55,38 @@ builds are unaffected.
 
 ## Using it
 
-The app runs in the background with no dock icon. Press
-`Ctrl/Cmd+Shift+Space` — or use the tray/menu-bar icon — and the capture box
-appears, ready to type. Enter saves and closes; Shift+Enter adds a line; Esc
-dismisses. "Dictate" transcribes speech on-device and drops the text into the
-box for you to check before saving. A dictated capture can be undone from the
-tray until your next capture.
+The app runs in the background with no dock icon. Two global hotkeys open the
+capture box — or use the tray/menu-bar icon:
+
+| Hotkey | What it does |
+|---|---|
+| `Ctrl/Cmd+Shift+Space` | Opens the box **already listening** — speak straight away |
+| `Ctrl/Cmd+Shift+Enter` | Opens the box for typing |
+
+Dictation gets the easier binding because it is the mode most reached for, and
+it is the one that otherwise costs a keystroke *and* a click. Both are
+configurable, and they are registered independently — if your window manager has
+claimed one, the other still works.
+
+Enter saves and closes; Shift+Enter adds a line; Esc dismisses. While dictating,
+the footer shows which of three things is happening: **Starting microphone…**,
+**Listening** with a live level meter and a timer, or **Transcribing…**. The
+meter is driven by the same samples that get transcribed, so a meter that does
+not move means the microphone is muted or the wrong input device is selected.
+You can keep typing throughout — dictation never takes the keyboard away.
+
+Transcription typically takes 3–5 seconds. There is deliberately no percentage:
+whisper's own progress output reports 185% on a 16-second clip and 1090% on a
+2.8-second one, so any number shown would be invented.
+
+A dictated capture can be undone from the tray until your next capture.
 
 Everything lands in `~/waypoint/inbox.md`, one markdown list item per thought.
 Edit it by hand whenever you like — captures only ever append, and never
 rewrite what is already there.
 
 Settings live in `~/.config/waypoint/config.json` (`inboxPath`, `hotkey`,
-`whisperModelPath`); defaults apply when the file is absent.
+`dictateHotkey`, `whisperModelPath`); defaults apply when the file is absent.
 
 ## Structure
 

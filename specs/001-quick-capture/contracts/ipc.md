@@ -82,9 +82,23 @@ the box clearing itself on open must not be able to discard it.
 
 ### `capture:reset` — `send`
 
+```ts
+mode: 'type' | 'dictate'
+```
+
 Emitted immediately before the window is shown. The renderer clears the input, resets dictation
 state, and focuses the text field. This is what makes a re-shown pre-warmed window indistinguishable
 from a freshly opened one (R2, FR-003).
+
+`mode` carries which hotkey opened the box (FR-001a). On `'dictate'` the renderer begins recording
+straight after the reset, so a spoken capture needs no click. The reset still happens first — the
+mode changes what follows an empty box, never whether the box is emptied.
+
+### `capture:start-dictation` — `send`
+
+Emitted when the dictate hotkey fires while the box is **already open**. Deliberately distinct from
+`capture:reset`: this path must not clear in-progress input (FR-003a), and beginning to record
+neither replaces nor discards what the user has typed. No payload.
 
 ### `capture:notice` — `send`
 
@@ -102,8 +116,15 @@ must not stand between the user and the next thought.
 
 Playwright cannot deliver an OS-level global shortcut, and CI runners have no
 microphone. When `WAYPOINT_E2E=1`, the main process therefore exposes a `__waypoint`
-global with `showCapture`, `hideCapture`, `trayClick`, `isCaptureVisible`, `hotkeyRegistered`,
-`undoableId`, `undoLatest`, and `fakeDictation`.
+global with `showCapture`, `showCaptureDictating`, `hideCapture`, `trayClick`, `isCaptureVisible`,
+`hotkeyRegistered`, `dictateHotkeyRegistered`, `undoableId`, `undoLatest`, `fakeDictation`,
+`setStubTranscript`, and `setStubTranscriptionDelay`.
+
+The two stub setters exist because the transcribing state is only observable if transcription takes
+measurable time; an instantly-returning stub cannot demonstrate that a real 3–5 second wait is being
+reported. The dictation *indicator* tests do not use this seam at all — they drive Chromium's fake
+capture device through the real `getUserMedia` path, since a stubbed microphone could not show that
+the level meter reflects genuine audio.
 
 **Accepted on these conditions**, reviewed under T080:
 

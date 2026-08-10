@@ -93,9 +93,26 @@ does not create a blank entry.
 Open the box, type `half a thought`, then press the hotkey again **without** submitting.
 **Expect**: the same box, still showing `half a thought`. No second window, no cleared input.
 
+### 4a. Dictate hotkey and state feedback (FR-001a, FR-005a, FR-005b)
+
+1. Press `Ctrl/Cmd+Shift+Space` from another app. **Expect**: the box opens **already listening** —
+   a red dot, the word `Listening`, a level meter, and a running timer, with no click needed.
+2. Speak. **Expect**: the meter moves with your voice. Now mute the microphone at the OS level and
+   speak again — **expect** the meter to sit still. That contrast is the whole point of the meter:
+   a silent mic is visible before you finish talking, not after.
+3. Press Stop. **Expect**: the footer changes to `Transcribing…` with a moving indeterminate bar,
+   visibly different from the recording state, and showing **no percentage**.
+4. While each of those states is showing, type something. **Expect**: the text field accepts it
+   throughout (FR-005b).
+5. Press `Ctrl/Cmd+Shift+Enter` instead. **Expect**: the box opens for typing with the microphone
+   untouched — `data-state` idle, no meter.
+6. With the box open and text typed, press `Ctrl/Cmd+Shift+Space`. **Expect**: recording starts and
+   the typed text is still there (FR-003a).
+
 ### 5. Offline voice capture (US2 · FR-005, FR-006)
 
-1. **Disconnect the network entirely** — this is the point of the test.
+1. **Disconnect the network entirely** — this is the point of the test. On this machine:
+   `nmcli networking off`, and `nmcli networking on` afterwards.
 2. Open the box, press the dictate control, speak a sentence, stop.
 3. **Expect**: transcribed text appears **in the box**, not in the file. Nothing has been saved yet.
 4. Press Enter. **Expect**: it lands in `inbox.md`, formatted identically to a typed item.

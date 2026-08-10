@@ -288,7 +288,56 @@ Each task traces to the spec, plan, or contract obligation it closes.
 - [X] T074 Resolve `whisperModelPath` to where the model is actually installed, per plan.md bundling and data-model.md Config (partial). `packages/desktop/src/main/config.ts` defaults it under `~/.local/share/waypoint/whisper/`, but `scripts/fetch-whisper.sh` installs to `<repo>/resources/whisper/` and packaged builds use `process.resourcesPath/whisper`, so dictation cannot find the model out of the box. Derive the default the same way `whisperBinaryPath()` does in `packages/desktop/src/main/main.ts`, keeping the config key as an override, and cover it with a config test.
 - [X] T075 Add the opt-in whisper integration test and its audio fixture, per contracts/whisper-cli.md and SC-003 (missing). `npm run test:whisper` points at `packages/desktop/dist/tests/whisper-integration.test.js`, which has never existed, so the script fails and no test has exercised the real binary. Write `packages/desktop/tests/whisper-integration.test.ts` with a short WAV fixture, skipped unless `WAYPOINT_WHISPER_INTEGRATION=1` and the model is present.
 - [X] T076 Pin the model checksum and make verification fail closed, per research R10 (partial). `scripts/fetch-whisper.sh` defaults `MODEL_SHA256` to empty and only warns, and `.github/workflows/release.yml` passes an unset repository variable, so a release can bundle an unverified model. Pin the SHA-256 in the script and make the release path abort when it is missing.
-- [~] T077 **Scenarios 2 and 10 done; 5 still needs a human.** Verified 2026-08-10 by launching the real app (no test seam) and driving the actual X11 global hotkey with xdotool: the box appeared, real keystrokes typed, Enter saved `- 2026-08-10T18:39:59-04:00 captured through the real global hotkey`, and the instrumented trace read **1ms** against the 100ms budget (§2). A screenshot of the running box confirms no categorization, tag, or project prompt (§10). **§5 (dictate into a real microphone with the network off) remains outstanding — this environment has no audio input.** Original text: Run quickstart scenarios 2, 5, and 10 on the Linux dev machine and record the results (partial, completes T070). These are the three that cannot be automated: hand-timed hotkey latency, real-microphone dictation with the network disconnected, and the visual confirmation that no categorization prompt ever appears. Requires `cmake` and a completed `scripts/fetch-whisper.sh` run.
+- [~] T077 **Scenarios 2, 5, and 10 exercised; §5 not yet re-run with the network down.** On 2026-08-10 the user ran `npm run dev`, pressed the real `Ctrl+Shift+Space`, got the box, pressed Dictate, and dictation worked — closing the microphone half of §5 on real hardware. They did **not** report disconnecting the network, so the offline half of §5 is still unconfirmed; it is a one-command re-check (`nmcli networking off`, dictate, `nmcli networking on`) rather than open work. The session also produced the finding that drives Phase 8: no visible difference between recording and transcribing. Earlier, verified by launching the real app (no test seam) and driving the actual X11 global hotkey with xdotool: the box appeared, real keystrokes typed, Enter saved `- 2026-08-10T18:39:59-04:00 captured through the real global hotkey`, and the instrumented trace read **1ms** against the 100ms budget (§2). A screenshot of the running box confirms no categorization, tag, or project prompt (§10). **§5 (dictate into a real microphone with the network off) remains outstanding — this environment has no audio input.** Original text: Run quickstart scenarios 2, 5, and 10 on the Linux dev machine and record the results (partial, completes T070). These are the three that cannot be automated: hand-timed hotkey latency, real-microphone dictation with the network disconnected, and the visual confirmation that no categorization prompt ever appears. Requires `cmake` and a completed `scripts/fetch-whisper.sh` run.
 - [ ] T078 Build and validate the macOS artifact, per quickstart "Packaged build validation" (missing, completes T071). Tag a release so `.github/workflows/release.yml` produces the arm64 DMG, then on the MacBook re-run quickstart scenarios 1, 5, 9, and 11 with the network off to prove the bundled model needs no download.
 - [X] T079 Add application and tray icons in `packages/desktop/build/`, per plan.md packaging (missing). The directory electron-builder expects does not exist, so the packaged app ships a default Electron icon, and `tray.ts` uses `nativeImage.createEmpty()` which renders as a blank menu-bar item.
 - [X] T080 Review the `WAYPOINT_E2E` test seam in `packages/desktop/src/main/main.ts` (unrequested). The env-gated `__waypoint` global exposing `showCapture`, `fakeDictation`, and `undoLatest` is production-code surface that no spec, plan, or contract asked for. Either document it in contracts/ipc.md as an accepted testing seam or replace it with an approach that leaves no hook in shipped code.
+
+---
+
+## Phase 8: Dictation Feedback and Dual Hotkeys
+
+Added 2026-08-10 from live use of the built app. Two findings, one from the user and
+one measured while designing the fix:
+
+1. Recording and transcribing are visually identical — a dimmed button is the only
+   difference — so a multi-second transcription reads as a hang. Closes FR-005a/FR-005b, SC-008.
+2. Voice is the mode reached for most, but it costs a hotkey **and** a click. Closes FR-001a.
+
+Measured while scoping, and recorded here because both constrain the design:
+whisper's `--print-progress` reports **185%** on a 16s clip and **1090%** on a 2.8s one
+(padded 30s window), so a percentage is impossible; and transcription takes **~3–5s** for
+typical captures (263ms model load, the rest encode), which is why the gap is so noticeable.
+
+### Tests for Phase 8 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
+
+- [X] T081 [P] Failing tests for `dictateHotkey` in `packages/desktop/tests/config.test.ts`: it defaults to `CommandOrControl+Shift+Space` while `hotkey` defaults to `CommandOrControl+Shift+Enter`, each is independently overridable, and an invalid value falls back without blocking startup
+- [X] T082 [P] Failing tests for `registerHotkeys` in `packages/desktop/tests/hotkey.test.ts`: both accelerators register and route to different handlers; **either one failing leaves the other working** and names the failed one in the notice (FR-001a); two identical accelerators are reported rather than silently registering one
+- [X] T083 [P] Failing E2E in `packages/desktop/tests/e2e/dictate-hotkey.spec.ts`: the dictate trigger opens the box already recording; firing it while the box is open with typed text starts recording **without clearing the text** (FR-003a)
+- [X] T084 [P] Failing E2E in `packages/desktop/tests/e2e/dictation-indicator.spec.ts` using Chromium's fake capture device: the status region reads acquiring → recording → transcribing → idle, the level meter responds to real audio, and the textarea stays focused and editable in every state (FR-005a, FR-005b, SC-008)
+
+### Implementation for Phase 8
+
+- [X] T085 Add `dictateHotkey` to `WaypointConfig` and `defaultConfig` in `packages/desktop/src/main/config.ts`, moving `hotkey` to `CommandOrControl+Shift+Enter` (satisfies T081)
+- [X] T086 Add `registerHotkeys` to `packages/desktop/src/main/hotkey.ts`, registering each accelerator independently so one failure cannot take the other down (satisfies T082). The single-binding `registerHotkey` is kept as the primitive and stays covered by its own tests.
+- [X] T087 Thread a capture mode through `CaptureWindow.show()`, `capture:reset`, and the preload bridge so the renderer knows to begin dictation on open, leaving existing input untouched when the box is already visible (satisfies T083)
+- [X] T088 Add the status region — acquiring / recording with live level meter and elapsed timer / transcribing — to `packages/desktop/src/renderer/index.html` and `capture.ts`, honouring `prefers-reduced-motion` and announcing state changes via `aria-live` (satisfies T084)
+- [X] T089 Give each E2E instance its own `--user-data-dir` in `packages/desktop/tests/e2e/harness.ts`. Found while spiking T084: a running `npm run dev` holds Electron's single-instance lock, so the whole suite fails with an unexplained "browser has been closed" whenever the app is open
+- [X] T090 Update `README.md` and `quickstart.md` for the two hotkeys and the new default binding
+
+**Checkpoint**: Dictation is reachable in one keystroke and never leaves the user
+guessing whether the app is listening, working, or wedged.
+
+**Phase 8 result** (2026-08-10): 160 unit tests and 50 E2E tests pass, up from 149 and 36.
+Verified beyond the suite by driving the real X11 `Ctrl+Shift+Space` against the running app and
+reading the live DOM: `state=recording, level=0.328, label="Listening"`. Screenshots of both states
+confirm they are unmistakable. Two findings worth keeping:
+
+- The first attempt at that manual check appeared to fail — the box opened idle. Cause was not the
+  code: a stale `npm run dev` from an earlier session still owned the `Ctrl+Shift+Space` global
+  shortcut, so the new instance's registration lost the race and the *old* app's box was what
+  appeared. Global accelerators are first-come-first-served per combination, which makes leftover
+  instances actively misleading during manual validation. Kill any running instance first.
+- Stopping a recording the instant it starts captures zero samples and correctly reports no speech,
+  so it never reaches the transcribing state. The indicator tests therefore wait for the level meter
+  to register real audio before stopping — which also makes them assert the meter works.

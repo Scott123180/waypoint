@@ -14,8 +14,10 @@ import { WHISPER_MODEL_FILENAME } from "./resources";
 export interface WaypointConfig {
   /** Absolute path to the markdown inbox. Lives outside the app repo. */
   inboxPath: string;
-  /** Electron accelerator string for the global capture hotkey. */
+  /** Electron accelerator opening the capture box for typing. */
   hotkey: string;
+  /** Electron accelerator opening the capture box already dictating (FR-001a). */
+  dictateHotkey: string;
   /** Absolute path to the bundled whisper model. */
   whisperModelPath: string;
 }
@@ -54,7 +56,10 @@ export function defaultConfig(env: ConfigEnv): WaypointConfig {
   const resources = env.resourcesDir ?? "";
   return {
     inboxPath: join(env.home, "waypoint", "inbox.md"),
-    hotkey: "CommandOrControl+Shift+Space",
+    // Dictation gets the more prominent combination: it is the mode reached for
+    // most, and it is the one that otherwise costs a keystroke *and* a click.
+    hotkey: "CommandOrControl+Shift+Enter",
+    dictateHotkey: "CommandOrControl+Shift+Space",
     whisperModelPath: join(resources, WHISPER_MODEL_FILENAME),
   };
 }
@@ -108,7 +113,7 @@ export function loadConfig(filePath: string, env: ConfigEnv): ConfigLoadResult {
   const config = { ...defaults };
   const badKeys: string[] = [];
 
-  for (const key of ["inboxPath", "hotkey", "whisperModelPath"] as const) {
+  for (const key of ["inboxPath", "hotkey", "dictateHotkey", "whisperModelPath"] as const) {
     const value = record[key];
     if (value === undefined) continue;
     if (typeof value === "string" && value.length > 0) {

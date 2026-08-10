@@ -24,7 +24,20 @@ describe("defaultConfig", () => {
 
   test("ships a sensible default hotkey", () => {
     const cfg = defaultConfig({ home: "/home/alice", platform: "linux" });
-    assert.equal(cfg.hotkey, "CommandOrControl+Shift+Space");
+    assert.equal(cfg.hotkey, "CommandOrControl+Shift+Enter");
+  });
+
+  test("gives dictation the more prominent binding", () => {
+    // Voice is the mode reached for most, so it gets the key that is easiest to
+    // hit; typing takes the second one (FR-001a).
+    const cfg = defaultConfig({ home: "/home/alice", platform: "linux" });
+    assert.equal(cfg.dictateHotkey, "CommandOrControl+Shift+Space");
+  });
+
+  test("the two default hotkeys are distinct", () => {
+    // Identical bindings would mean one of the two silently never registers.
+    const cfg = defaultConfig({ home: "/home/alice", platform: "linux" });
+    assert.notEqual(cfg.hotkey, cfg.dictateHotkey);
   });
 
   test("points the model at the bundled resources directory", () => {
@@ -86,6 +99,25 @@ describe("loadConfig", () => {
     const result = loadConfig(p, env);
     assert.deepEqual(result.config, defaultConfig(env));
     assert.match(result.problem ?? "", /config/i);
+  });
+
+  test("each hotkey is overridable independently of the other", () => {
+    const p = join(dir, "config.json");
+    writeFileSync(p, JSON.stringify({ dictateHotkey: "Alt+D" }));
+
+    const result = loadConfig(p, env);
+    assert.equal(result.config.dictateHotkey, "Alt+D");
+    assert.equal(result.config.hotkey, defaultConfig(env).hotkey);
+    assert.equal(result.problem, undefined);
+  });
+
+  test("an invalid dictateHotkey falls back without blocking startup", () => {
+    const p = join(dir, "config.json");
+    writeFileSync(p, JSON.stringify({ dictateHotkey: "" }));
+
+    const result = loadConfig(p, env);
+    assert.equal(result.config.dictateHotkey, defaultConfig(env).dictateHotkey);
+    assert.match(result.problem ?? "", /dictateHotkey/);
   });
 
   test("a wrong-typed value is ignored rather than blocking startup", () => {
