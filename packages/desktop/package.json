@@ -1,0 +1,11 @@
+{
+  "name": "@waypoint/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron thin client. Contains no domain logic.",
+  "main": "dist/src/main/main.js",
+  "license": "MIT",
+  "dependencies": {
+    "@waypoint/core": "*"
+  }
+}

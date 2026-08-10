@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Bundled whisper.cpp binary and the ~500MB model — fetched by scripts/fetch-whisper.sh,
+# never committed. A public repo must not carry a half-gigabyte blob in its history.
+resources/
+
+# Packaged artifacts (produced by CI, not locally)
+release/
+
+# Test output
+playwright-report/
+test-results/
+coverage/
+
+# Logs and env
+*.log
+npm-debug.log*
+.env
+.env.*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

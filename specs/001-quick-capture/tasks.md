@@ -35,13 +35,13 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 **Purpose**: Project initialization and toolchain
 
-- [ ] T001 Pin the Node version with a `.nvmrc` containing `22` (already installed via nvm as v22.22.1; the system `node` on PATH is 18.19.1, which is EOL). No install needed — `nvm use` in the project directory. Note in `README.md` that the toolchain is nvm-managed.
-- [ ] T002 Initialize npm workspaces root `package.json` declaring `packages/core` and `packages/desktop`
-- [ ] T003 [P] Configure TypeScript: base `tsconfig.json` plus per-package configs, `tsc`-only build with no bundler
-- [ ] T004 [P] Create `.gitignore` excluding `resources/`, `dist/`, `node_modules/` — the whisper binary and ~500MB model must never enter git history
-- [ ] T005 [P] Add npm scripts in root `package.json`: `test` (node:test for core), `test:e2e` (Playwright), `test:whisper` (opt-in), `dev`
-- [ ] T006 [P] Write `scripts/fetch-whisper.sh` — build whisper.cpp from a pinned tag and download `ggml-small.en.bin` with a pinned SHA-256 checksum into `resources/whisper/`
-- [ ] T007 [P] Create `.github/workflows/ci.yml` on `ubuntu-latest` running **both** `npm test` and `npm run test:e2e` under `xvfb-run` (Playwright Electron needs a display). The SC-001 latency assertion runs here as a regression signal; the authoritative measurement stays T070/T071 on real hardware.
+- [X] T001 Pin the Node version with a `.nvmrc` containing `22` (already installed via nvm as v22.22.1; the system `node` on PATH is 18.19.1, which is EOL). No install needed — `nvm use` in the project directory. Note in `README.md` that the toolchain is nvm-managed.
+- [X] T002 Initialize npm workspaces root `package.json` declaring `packages/core` and `packages/desktop`
+- [X] T003 [P] Configure TypeScript: base `tsconfig.json` plus per-package configs, `tsc`-only build with no bundler
+- [X] T004 [P] Create `.gitignore` excluding `resources/`, `dist/`, `node_modules/` — the whisper binary and ~500MB model must never enter git history
+- [X] T005 [P] Add npm scripts in root `package.json`: `test` (node:test for core), `test:e2e` (Playwright), `test:whisper` (opt-in), `dev`
+- [X] T006 [P] Write `scripts/fetch-whisper.sh` — build whisper.cpp from a pinned tag and download `ggml-small.en.bin` with a pinned SHA-256 checksum into `resources/whisper/`
+- [X] T007 [P] Create `.github/workflows/ci.yml` on `ubuntu-latest` running **both** `npm test` and `npm run test:e2e` under `xvfb-run` (Playwright Electron needs a display). The SC-001 latency assertion runs here as a regression signal; the authoritative measurement stays T070/T071 on real hardware.
 
 ---
 
@@ -51,12 +51,12 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 Define port interfaces `InboxStore`, `TranscriptionPort`, `Clock` in `packages/core/src/ports/index.ts` per [contracts/core-api.md](contracts/core-api.md) (types only — no behavior, so no test precedes this)
-- [ ] T009 [P] Define `EmptyCaptureError`, `TranscriptionFailedError`, `InboxWriteError` in `packages/core/src/errors.ts`
-- [ ] T010 [P] Create the core public entry point `packages/core/src/index.ts` exporting only the documented surface
-- [ ] T011 Create test fakes `FakeInboxStore`, `FakeTranscriptionPort`, `FixedClock` in `packages/core/tests/fakes.ts` — these are what make domain rules testable without Electron, a filesystem, or the model
-- [ ] T012 [P] Write failing tests for config loading (defaults when absent, override when present, defaults + report when malformed) in `packages/desktop/tests/config.test.ts`
-- [ ] T013 Implement config loader (`inboxPath`, `hotkey`, `whisperModelPath`) in `packages/desktop/src/main/config.ts` — a bad config must never block startup
+- [X] T008 Define port interfaces `InboxStore`, `TranscriptionPort`, `Clock` in `packages/core/src/ports/index.ts` per [contracts/core-api.md](contracts/core-api.md) (types only — no behavior, so no test precedes this)
+- [X] T009 [P] Define `EmptyCaptureError`, `TranscriptionFailedError`, `InboxWriteError` in `packages/core/src/errors.ts`
+- [X] T010 [P] Create the core public entry point `packages/core/src/index.ts` exporting only the documented surface
+- [X] T011 Create test fakes `FakeInboxStore`, `FakeTranscriptionPort`, `FixedClock` in `packages/core/tests/fakes.ts` — these are what make domain rules testable without Electron, a filesystem, or the model
+- [X] T012 [P] Write failing tests for config loading (defaults when absent, override when present, defaults + report when malformed) in `packages/desktop/tests/config.test.ts`
+- [X] T013 Implement config loader (`inboxPath`, `hotkey`, `whisperModelPath`) in `packages/desktop/src/main/config.ts` — a bad config must never block startup
 
 **Checkpoint**: Contracts and harness ready — user story work can begin
 
@@ -70,21 +70,21 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 ### Core Tests for User Story 1 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
 
-- [ ] T014 [P] [US1] Failing tests for `CaptureItem`: text trimmed, empty/whitespace rejected with `EmptyCaptureError`, `capturedAt` assigned by core and not accepted from callers, no tag/project fields exist — in `packages/core/tests/capture-item.test.ts`
-- [ ] T015 [P] [US1] Failing tests for inbox serialization: ISO 8601 with local UTC offset, single space after timestamp, two-space continuation indent for multi-line text, text preserved verbatim, trailing newline — in `packages/core/tests/serialize.test.ts`
-- [ ] T016 [P] [US1] Failing tests for the append queue: submit order equals write order, enqueue resolves before the underlying write completes, `flush()` drains all pending — in `packages/core/tests/append-queue.test.ts`
-- [ ] T017 [P] [US1] Failing tests for append **failure handling**: a failing store is retried exactly once, then raises `InboxWriteError` whose payload carries the raw text; the queue keeps processing later items and never silently drops one — in `packages/core/tests/append-queue-failure.test.ts`
-- [ ] T018 [P] [US1] Failing tests for `CaptureService.submit`: returns `{id, capturedAt}` **without awaiting the write**, rejects empty input before any write is enqueued, one live undo window at a time — in `packages/core/tests/capture-service.submit.test.ts`
-- [ ] T019 [P] [US1] Failing contract tests for `FsInboxStore.append` against a real temp directory: creates file and parent dirs when absent, appends with `O_APPEND`, inserts a newline first when the existing file lacks a trailing one, leaves all pre-existing hand-written content byte-identical — in `packages/desktop/tests/fs-inbox-store.test.ts`
+- [X] T014 [P] [US1] Failing tests for `CaptureItem`: text trimmed, empty/whitespace rejected with `EmptyCaptureError`, `capturedAt` assigned by core and not accepted from callers, no tag/project fields exist — in `packages/core/tests/capture-item.test.ts`
+- [X] T015 [P] [US1] Failing tests for inbox serialization: ISO 8601 with local UTC offset, single space after timestamp, two-space continuation indent for multi-line text, text preserved verbatim, trailing newline — in `packages/core/tests/serialize.test.ts`
+- [X] T016 [P] [US1] Failing tests for the append queue: submit order equals write order, enqueue resolves before the underlying write completes, `flush()` drains all pending — in `packages/core/tests/append-queue.test.ts`
+- [X] T017 [P] [US1] Failing tests for append **failure handling**: a failing store is retried exactly once, then raises `InboxWriteError` whose payload carries the raw text; the queue keeps processing later items and never silently drops one — in `packages/core/tests/append-queue-failure.test.ts`
+- [X] T018 [P] [US1] Failing tests for `CaptureService.submit`: returns `{id, capturedAt}` **without awaiting the write**, rejects empty input before any write is enqueued, one live undo window at a time — in `packages/core/tests/capture-service.submit.test.ts`
+- [X] T019 [P] [US1] Failing contract tests for `FsInboxStore.append` against a real temp directory: creates file and parent dirs when absent, appends with `O_APPEND`, inserts a newline first when the existing file lacks a trailing one, leaves all pre-existing hand-written content byte-identical — in `packages/desktop/tests/fs-inbox-store.test.ts`
 
 ### Core Implementation for User Story 1
 
-- [ ] T020 [P] [US1] Implement `CaptureItem` entity and validation in `packages/core/src/capture/capture-item.ts` (satisfies T014)
-- [ ] T021 [P] [US1] Implement the markdown serializer in `packages/core/src/inbox/serialize.ts` per [contracts/inbox-format.md](contracts/inbox-format.md) (satisfies T015)
-- [ ] T022 [US1] Implement the serialized non-blocking append queue in `packages/core/src/inbox/append-queue.ts` (satisfies T016; depends on T021)
-- [ ] T023 [US1] Implement append failure handling in `packages/core/src/inbox/append-queue.ts`: retry once, then raise `InboxWriteError` carrying the raw text so a failed thought stays recoverable — never silently dropped (satisfies T017)
-- [ ] T024 [US1] Implement `CaptureService.submit` and `flush` in `packages/core/src/capture/capture-service.ts` (satisfies T018; depends on T020, T022) — must return on enqueue, never on `fsync`
-- [ ] T025 [US1] Implement `FsInboxStore.append` in `packages/desktop/src/main/adapters/fs-inbox-store.ts` (satisfies T019); leave `size`/`readTail`/`truncate` unimplemented until US3 so US1 ships standalone
+- [X] T020 [P] [US1] Implement `CaptureItem` entity and validation in `packages/core/src/capture/capture-item.ts` (satisfies T014)
+- [X] T021 [P] [US1] Implement the markdown serializer in `packages/core/src/inbox/serialize.ts` per [contracts/inbox-format.md](contracts/inbox-format.md) (satisfies T015)
+- [X] T022 [US1] Implement the serialized non-blocking append queue in `packages/core/src/inbox/append-queue.ts` (satisfies T016; depends on T021)
+- [X] T023 [US1] Implement append failure handling in `packages/core/src/inbox/append-queue.ts`: retry once, then raise `InboxWriteError` carrying the raw text so a failed thought stays recoverable — never silently dropped (satisfies T017)
+- [X] T024 [US1] Implement `CaptureService.submit` and `flush` in `packages/core/src/capture/capture-service.ts` (satisfies T018; depends on T020, T022) — must return on enqueue, never on `fsync`
+- [X] T025 [US1] Implement `FsInboxStore.append` in `packages/desktop/src/main/adapters/fs-inbox-store.ts` (satisfies T019); leave `size`/`readTail`/`truncate` unimplemented until US3 so US1 ships standalone
 
 ### Client Tests for User Story 1 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
 
