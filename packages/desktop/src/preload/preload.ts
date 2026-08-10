@@ -1,0 +1,64 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+export type SubmitResponse = { ok: true; id: string } | { ok: false; error: "empty" };
+
+export interface Notice {
+  id?: string;
+  level: "info" | "error";
+  message: string;
+  recoverableText?: string;
+}
+
+/**
+ * The entire surface the renderer can reach. Nothing else crosses the bridge.
+ */
+export type TranscribeResponse =
+  | { status: "ok"; text: string }
+  | { status: "no-speech" }
+  | { status: "failed"; message: string };
+
+const api = {
+  submit(text: string, source: "typed" | "dictated"): Promise<SubmitResponse> {
+    return ipcRenderer.invoke("capture:submit", text, source);
+  },
+
+  transcribe(samples: Float32Array, sampleRate: number): Promise<TranscribeResponse> {
+    return ipcRenderer.invoke("capture:transcribe", samples, sampleRate);
+  },
+
+  /** Test seam: lets the E2E suite drive dictation without a microphone. */
+  onFakeDictation(callback: (result: TranscribeResponse) => void): void {
+    ipcRenderer.on("capture:fake-dictation", (_event, result: TranscribeResponse) =>
+      callback(result),
+    );
+  },
+
+  undo(id: string): Promise<{ ok: boolean; reason?: string }> {
+    return ipcRenderer.invoke("capture:undo", id);
+  },
+
+  ackNotice(id: string): void {
+    ipcRenderer.send("capture:notice-ack", id);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("capture:dismiss");
+  },
+
+  onReset(callback: (mode: "type" | "dictate") => void): void {
+    ipcRenderer.on("capture:reset", (_event, mode: "type" | "dictate" = "type") => callback(mode));
+  },
+
+  /** Dictation asked for on a box that was already open, so nothing is reset. */
+  onStartDictation(callback: () => void): void {
+    ipcRenderer.on("capture:start-dictation", () => callback());
+  },
+
+  onNotice(callback: (notice: Notice) => void): void {
+    ipcRenderer.on("capture:notice", (_event, notice: Notice) => callback(notice));
+  },
+};
+
+contextBridge.exposeInMainWorld("waypoint", api);
+
+export type WaypointApi = typeof api;

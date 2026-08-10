@@ -1,0 +1,35 @@
+{
+  "name": "waypoint",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first, plain-text capture and review",
+  "license": "MIT",
+  "workspaces": [
+    "packages/core",
+    "packages/desktop"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:core": "tsc -p packages/core",
+    "build:desktop": "tsc -p packages/desktop && npm run build:fixtures && npm run build:renderer",
+    "build:fixtures": "mkdir -p packages/desktop/dist/tests/fixtures && cp packages/desktop/tests/fixtures/* packages/desktop/dist/tests/fixtures/ && chmod +x packages/desktop/dist/tests/fixtures/*.sh",
+    "build:renderer": "tsc -p packages/desktop/tsconfig.renderer.json && cp packages/desktop/src/renderer/index.html packages/desktop/dist/src/renderer/index.html",
+    "build": "npm run build:core && npm run build:desktop",
+    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/desktop --noEmit",
+    "test": "npm run build && node --test \"packages/*/dist/tests/**/*.test.js\"",
+    "test:core": "npm run build:core && node --test \"packages/core/dist/tests/**/*.test.js\"",
+    "test:e2e": "npm run build && playwright test",
+    "test:whisper": "npm run build && WAYPOINT_WHISPER_INTEGRATION=1 node --test \"packages/desktop/dist/tests/whisper-integration.test.js\"",
+    "dev": "npm run build && electron packages/desktop/dist/src/main/main.js --no-sandbox",
+    "package": "npm run build && electron-builder --projectDir packages/desktop --config electron-builder.yml --config.electronVersion=$(node -p \"require('electron/package.json').version\") --publish never"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^22.10.2",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2"
+  }
+}

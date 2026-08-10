@@ -1,0 +1,61 @@
+appId: dev.waypoint.app
+productName: Waypoint
+copyright: Waypoint
+
+# Without this the executable is named after the package (`@waypoint/desktop`),
+# producing a binary called `@waypointdesktop` — a leading `@` that the AppImage
+# launcher cannot exec.
+executableName: waypoint
+
+# No native modules anywhere in the tree, so there is nothing to rebuild. The
+# step is disabled because it runs `npm install --production` inside the app
+# directory, which in an npm workspace prunes the hoisted devDependencies — up
+# to and including electron-builder's own app-builder binary, mid-build.
+npmRebuild: false
+
+directories:
+  output: ../../release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - build/trayTemplate*.png
+  - package.json
+  - "!dist/tests/**"
+  - "!**/*.map"
+  # The workspace symlink pulls in core's compiled tests too.
+  - "!node_modules/@waypoint/core/dist/tests/**"
+
+extraMetadata:
+  main: dist/src/main/main.js
+
+# The whisper binary and model ship inside the artifact rather than being
+# downloaded on first run: voice is core functionality, and the constitution
+# forbids core functionality depending on the network.
+extraResources:
+  - from: ../../resources/whisper
+    to: whisper
+    filter:
+      - "**/*"
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.productivity
+  # Background agent: no dock icon, summoned by hotkey or the menu-bar item.
+  extendInfo:
+    LSUIElement: true
+    NSMicrophoneUsageDescription: >-
+      Waypoint transcribes your dictated thoughts on this device. Audio is never
+      recorded to disk and never leaves your Mac.
+  # Signing and notarization are deliberately deferred; first launch needs a
+  # Gatekeeper bypass (right-click → Open).
+  identity: null
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Utility
+  synopsis: Local-first, plain-text capture
