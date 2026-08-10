@@ -26,16 +26,18 @@ whisper requires 16 kHz; the renderer resamples so no transcoding dependency is 
 
 ---
 
-## Spike gate before implementation
+## Spike gate — RESOLVED (GO)
 
-The `-f -` stdin path MUST be verified against the pinned whisper.cpp tag as the first task of the
-voice slice. It is a real upstream code path (`common.cpp` drains stdin into memory and initialises
-`dr_wav` from the buffer), but availability varies by version and the CLI was renamed
-`main` → `whisper-cli` upstream.
+Verified 2026-08-09 against tag **`v1.7.4`**: `read_wav()` in `examples/common.cpp:642` handles
+`fname == "-"` by draining stdin into memory and calling `drwav_init_memory`. No disk write on that
+path. Binary target is `whisper-cli`. The memory-backed fallback in R1 is **not needed**.
 
-**If the spike disproves stdin support**, fall back to a memory-backed path (`/dev/shm` on Linux,
-named pipe or RAM disk on macOS) — see R1. Do **not** silently fall back to a regular temp file;
-that would violate FR-006a, and the spec's privacy guarantee is not negotiable against convenience.
+Two requirements this imposes on the adapter:
+
+1. **Close the child's stdin after writing.** whisper reads until EOF; leaving the pipe open hangs
+   the process indefinitely.
+2. **Do not treat stderr output as failure.** whisper logs `read N bytes from stdin` and progress
+   there on success. Only the exit code is authoritative.
 
 ---
 

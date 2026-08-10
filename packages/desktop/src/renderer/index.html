@@ -63,6 +63,22 @@
         border-top: 1px solid var(--border);
       }
       #notice.visible { display: block; }
+      #dictate-button {
+        font: inherit;
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      #dictate-button:hover { color: var(--fg); }
+      #dictate-button[aria-pressed="true"] {
+        color: var(--error);
+        border-color: var(--error);
+      }
       #notice .recoverable {
         display: block;
         margin-top: 4px;
@@ -81,6 +97,7 @@
     ></textarea>
     <footer>
       <span>Enter to save &middot; Shift+Enter for a new line &middot; Esc to dismiss</span>
+      <button id="dictate-button" type="button" aria-pressed="false">Dictate</button>
     </footer>
     <div id="notice" role="status" aria-live="polite"></div>
     <script type="module" src="./capture.js"></script>

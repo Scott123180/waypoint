@@ -13,7 +13,8 @@
   },
   "scripts": {
     "build:core": "tsc -p packages/core",
-    "build:desktop": "tsc -p packages/desktop && npm run build:renderer",
+    "build:desktop": "tsc -p packages/desktop && npm run build:fixtures && npm run build:renderer",
+    "build:fixtures": "mkdir -p packages/desktop/dist/tests/fixtures && cp packages/desktop/tests/fixtures/* packages/desktop/dist/tests/fixtures/ && chmod +x packages/desktop/dist/tests/fixtures/*.sh",
     "build:renderer": "tsc -p packages/desktop/tsconfig.renderer.json && cp packages/desktop/src/renderer/index.html packages/desktop/dist/src/renderer/index.html",
     "build": "npm run build:core && npm run build:desktop",
     "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/desktop --noEmit",

@@ -28,9 +28,22 @@ the buffer over IPC to the main process, and **pipe it to `whisper-cli` on stdin
 - `MediaRecorder` was rejected: it emits WebM/Opus, which whisper.cpp cannot read, and would force
   an ffmpeg dependency to transcode.
 
-**Verification required before implementation**: The `-f -` stdin path MUST be confirmed against the
-exact pinned whisper.cpp tag during the spike task, not assumed. It is a real code path but its
-availability varies by version, and the upstream CLI was renamed (`main` → `whisper-cli`) in 2024.
+**VERIFIED 2026-08-09 against tag `v1.7.4` (task T040 — spike resolved, GO).** Confirmed by reading
+`examples/common.cpp:642` in the pinned source: `read_wav()` special-cases `fname == "-"`, drains
+stdin into a `std::vector<uint8_t>` in 1 KB chunks, and initialises `dr_wav` via
+`drwav_init_memory`. There is no disk write anywhere on that path. The CLI target name is
+`whisper-cli` (`examples/cli/CMakeLists.txt:1`). **The fallback below is not needed.**
+
+Two implementation details the source makes explicit:
+
+- The read loop runs until `fread` returns 0, so the adapter **MUST close the child's stdin** after
+  writing the WAV. Leaving it open hangs the process forever.
+- It logs `read N bytes from stdin` to **stderr**. Harmless — the adapter reads only stdout — but
+  stderr must not be treated as an error signal on its own; only the exit code is authoritative.
+
+**Build prerequisite discovered during the spike**: whisper.cpp v1.7.4 builds with CMake, and
+`cmake` is **not installed** on the Linux dev machine (`g++` and `make` are). Install it before
+running `scripts/fetch-whisper.sh` locally; the GitHub Actions runners already have it.
 
 **Fallback if stdin is unsupported on the pinned version**: write the WAV to a memory-backed
 filesystem rather than to durable storage — `/dev/shm` on Linux, and on macOS a per-session

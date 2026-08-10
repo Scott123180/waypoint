@@ -11,9 +11,25 @@ export interface Notice {
 /**
  * The entire surface the renderer can reach. Nothing else crosses the bridge.
  */
+export type TranscribeResponse =
+  | { status: "ok"; text: string }
+  | { status: "no-speech" }
+  | { status: "failed"; message: string };
+
 const api = {
   submit(text: string, source: "typed" | "dictated"): Promise<SubmitResponse> {
     return ipcRenderer.invoke("capture:submit", text, source);
+  },
+
+  transcribe(samples: Float32Array, sampleRate: number): Promise<TranscribeResponse> {
+    return ipcRenderer.invoke("capture:transcribe", samples, sampleRate);
+  },
+
+  /** Test seam: lets the E2E suite drive dictation without a microphone. */
+  onFakeDictation(callback: (result: TranscribeResponse) => void): void {
+    ipcRenderer.on("capture:fake-dictation", (_event, result: TranscribeResponse) =>
+      callback(result),
+    );
   },
 
   dismiss(): void {

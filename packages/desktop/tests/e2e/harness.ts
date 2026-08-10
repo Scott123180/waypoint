@@ -12,6 +12,10 @@ export interface Harness {
   trigger(): Promise<void>;
   /** Invokes exactly what the tray icon's click handler invokes. */
   triggerFromTray(): Promise<void>;
+  /** Drives the dictation path with a canned transcript, bypassing the microphone. */
+  dictate(transcript: string): Promise<void>;
+  /** Drives the dictation path to a transcription failure. */
+  dictateFailure(message: string): Promise<void>;
   captureBox(): Promise<Page>;
   isBoxVisible(): Promise<boolean>;
   inbox(): string;
@@ -49,6 +53,14 @@ export async function launch(options: { hotkey?: string } = {}): Promise<Harness
     },
   });
 
+  // Wait until the renderer module has run and registered its listeners.
+  // Without this, a message sent immediately after launch can arrive before
+  // there is anything listening for it.
+  const firstWindow = await app.firstWindow();
+  await firstWindow.waitForFunction(
+    () => typeof (window as unknown as Record<string, unknown>)["waypoint"] === "object",
+  );
+
   const harness: Harness = {
     app,
     inboxPath,
@@ -61,6 +73,20 @@ export async function launch(options: { hotkey?: string } = {}): Promise<Harness
       await app.evaluate(() => {
         (globalThis as Record<string, any>)["__waypoint"].trayClick();
       });
+    },
+    async dictate(transcript: string) {
+      // CI runners have no microphone, so the audio capture step is bypassed and
+      // a canned transcript is fed through the real transcribe → insert path.
+      await app.evaluate(async (_electron, text) => {
+        await (globalThis as Record<string, any>)["__waypoint"].fakeDictation({ text });
+      }, transcript);
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async dictateFailure(message: string) {
+      await app.evaluate(async (_electron, msg) => {
+        await (globalThis as Record<string, any>)["__waypoint"].fakeDictation({ error: msg });
+      }, message);
+      await new Promise((r) => setTimeout(r, 150));
     },
     async captureBox() {
       return app.firstWindow();

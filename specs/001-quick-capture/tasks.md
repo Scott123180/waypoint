@@ -116,28 +116,28 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 **Independent Test**: With the network physically disconnected, open the box, dictate a sentence, and confirm the transcribed text appears in the box (inserted at the cursor, preserving anything already typed) and submits identically to typed text — plus `find` proves no `.wav` was written anywhere.
 
-- [ ] T040 [US2] **SPIKE GATE**: verify whisper.cpp `-f -` stdin support on the pinned tag, and confirm the binary name (`whisper-cli` vs legacy `main`). Record the result in [research.md](research.md) R1. **If stdin is unsupported, adopt the documented memory-backed fallback — do not fall back to a regular temp file, which would violate FR-006a.** Blocks T042 and T048.
+- [X] T040 [US2] **SPIKE GATE**: verify whisper.cpp `-f -` stdin support on the pinned tag, and confirm the binary name (`whisper-cli` vs legacy `main`). Record the result in [research.md](research.md) R1. **If stdin is unsupported, adopt the documented memory-backed fallback — do not fall back to a regular temp file, which would violate FR-006a.** Blocks T042 and T048.
 
 ### Tests for User Story 2 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
 
-- [ ] T041 [P] [US2] Create the fake `whisper-cli` fixture that echoes canned output for given stdin, in `packages/desktop/tests/fixtures/fake-whisper-cli.sh`
-- [ ] T042 [P] [US2] Failing contract tests for `WhisperAdapter` against the fake binary: argv construction, WAV piped to stdin, stdout parsed as transcript, non-zero exit raises `TranscriptionFailedError`, empty stdout returns `''`, timeout kills the child, missing binary/model fails without taking text capture down — in `packages/desktop/tests/whisper-adapter.test.ts`
-- [ ] T043 [P] [US2] Failing tests for `CaptureService.transcribe`: maps to `ok`/`no-speech`/`failed`, whitespace-only output becomes `no-speech` rather than an error, and **no code path writes a transcript to the inbox** — in `packages/core/tests/capture-service.transcribe.test.ts`
-- [ ] T044 [P] [US2] Failing tests for audio encoding: arbitrary-rate float input downsampled to 16kHz mono, valid 44-byte WAV header, correct 16-bit PCM payload — in `packages/desktop/tests/audio.test.ts`
-- [ ] T045 [P] [US2] Failing E2E: a completed transcript is **inserted at the cursor** in the capture box and never replaces text the user already typed, and is never auto-submitted — in `packages/desktop/tests/e2e/transcript-insert.spec.ts`
-- [ ] T046 [P] [US2] Failing E2E: a no-speech result leaves the box open with empty input, ready to retry or type, and writes nothing to the inbox (FR-017a) — in `packages/desktop/tests/e2e/no-speech.spec.ts`
+- [X] T041 [P] [US2] Create the fake `whisper-cli` fixture that echoes canned output for given stdin, in `packages/desktop/tests/fixtures/fake-whisper-cli.sh`
+- [X] T042 [P] [US2] Failing contract tests for `WhisperAdapter` against the fake binary: argv construction, WAV piped to stdin, stdout parsed as transcript, non-zero exit raises `TranscriptionFailedError`, empty stdout returns `''`, timeout kills the child, missing binary/model fails without taking text capture down — in `packages/desktop/tests/whisper-adapter.test.ts`
+- [X] T043 [P] [US2] Failing tests for `CaptureService.transcribe`: maps to `ok`/`no-speech`/`failed`, whitespace-only output becomes `no-speech` rather than an error, and **no code path writes a transcript to the inbox** — in `packages/core/tests/capture-service.transcribe.test.ts`
+- [X] T044 [P] [US2] Failing tests for audio encoding: arbitrary-rate float input downsampled to 16kHz mono, valid 44-byte WAV header, correct 16-bit PCM payload — in `packages/desktop/tests/audio.test.ts`
+- [X] T045 [P] [US2] Failing E2E: a completed transcript is **inserted at the cursor** in the capture box and never replaces text the user already typed, and is never auto-submitted — in `packages/desktop/tests/e2e/transcript-insert.spec.ts`
+- [X] T046 [P] [US2] Failing E2E: a no-speech result leaves the box open with empty input, ready to retry or type, and writes nothing to the inbox (FR-017a) — in `packages/desktop/tests/e2e/no-speech.spec.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T047 [P] [US2] Implement `getUserMedia` capture, 16kHz mono downsample, and dependency-free WAV encoding in `packages/desktop/src/renderer/audio.ts` (satisfies T044)
-- [ ] T048 [US2] Implement the whisper subprocess adapter in `packages/desktop/src/main/adapters/whisper-adapter.ts` per [contracts/whisper-cli.md](contracts/whisper-cli.md) (satisfies T042; depends on T040)
-- [ ] T049 [US2] Implement `CaptureService.transcribe` in `packages/core/src/capture/capture-service.ts` (satisfies T043)
-- [ ] T050 [US2] Add the `capture:transcribe` IPC channel in `packages/desktop/src/main/ipc.ts` and expose it in `packages/desktop/src/preload/preload.ts`
-- [ ] T051 [US2] Implement the dictate control and recording state (press to start, press to stop) in `packages/desktop/src/renderer/capture.ts`
-- [ ] T052 [US2] Implement transcript insertion at the cursor in `packages/desktop/src/renderer/capture.ts` — preserves existing typed text, never auto-submits, so the user always sees the transcript before it can become an item (satisfies T045, FR-007)
-- [ ] T053 [US2] Implement the no-speech branch in `packages/desktop/src/renderer/capture.ts`: box stays open with empty input and a non-blocking notice; nothing is saved (satisfies T046, FR-017a)
-- [ ] T054 [US2] Enforce audio hygiene in `packages/desktop/src/main/adapters/whisper-adapter.ts` and `renderer/audio.ts`: release buffers on return, kill the child on cancel and on app quit, hold no reference after transcription (satisfies T042 timeout/kill cases; verified by quickstart scenario 5)
-- [ ] T055 [US2] Handle microphone permission and loss: `NSMicrophoneUsageDescription` in the packaged `Info.plist`, lazy prompt on first dictation, non-blocking notice when the mic becomes unavailable mid-recording (verified by quickstart scenario 5)
+- [X] T047 [P] [US2] Implement `getUserMedia` capture, 16kHz mono downsample, and dependency-free WAV encoding in `packages/desktop/src/renderer/audio.ts` (satisfies T044)
+- [X] T048 [US2] Implement the whisper subprocess adapter in `packages/desktop/src/main/adapters/whisper-adapter.ts` per [contracts/whisper-cli.md](contracts/whisper-cli.md) (satisfies T042; depends on T040)
+- [X] T049 [US2] Implement `CaptureService.transcribe` in `packages/core/src/capture/capture-service.ts` (satisfies T043)
+- [X] T050 [US2] Add the `capture:transcribe` IPC channel in `packages/desktop/src/main/ipc.ts` and expose it in `packages/desktop/src/preload/preload.ts`
+- [X] T051 [US2] Implement the dictate control and recording state (press to start, press to stop) in `packages/desktop/src/renderer/capture.ts`
+- [X] T052 [US2] Implement transcript insertion at the cursor in `packages/desktop/src/renderer/capture.ts` — preserves existing typed text, never auto-submits, so the user always sees the transcript before it can become an item (satisfies T045, FR-007)
+- [X] T053 [US2] Implement the no-speech branch in `packages/desktop/src/renderer/capture.ts`: box stays open with empty input and a non-blocking notice; nothing is saved (satisfies T046, FR-017a)
+- [X] T054 [US2] Enforce audio hygiene in `packages/desktop/src/main/adapters/whisper-adapter.ts` and `renderer/audio.ts`: release buffers on return, kill the child on cancel and on app quit, hold no reference after transcription (satisfies T042 timeout/kill cases; verified by quickstart scenario 5)
+- [X] T055 [US2] Handle microphone permission and loss: `NSMicrophoneUsageDescription` in the packaged `Info.plist`, lazy prompt on first dictation, non-blocking notice when the mic becomes unavailable mid-recording (verified by quickstart scenario 5)
 
 **Checkpoint**: Voice capture works fully offline, transcript visible in the box before saving. Quickstart scenario 5 passes, including the no-`.wav` check.
 

@@ -9,6 +9,11 @@ export interface SubmitResult {
   capturedAt: Date;
 }
 
+export type TranscribeResult =
+  | { status: "ok"; text: string }
+  | { status: "no-speech" }
+  | { status: "failed"; message: string };
+
 export interface CaptureServiceDeps {
   inbox: InboxStore;
   transcription: TranscriptionPort;
@@ -37,11 +42,13 @@ interface UndoWindow {
 export class CaptureService {
   private readonly queue: AppendQueue;
   private readonly clock: Clock;
+  private readonly transcription: TranscriptionPort;
   private undoWindow: UndoWindow | undefined;
 
   constructor(deps: CaptureServiceDeps) {
     this.queue = new AppendQueue(deps.inbox, deps.onError);
     this.clock = deps.clock ?? systemClock;
+    this.transcription = deps.transcription;
   }
 
   /**
@@ -66,6 +73,36 @@ export class CaptureService {
     this.undoWindow = { id: item.id, block, source, text: item.text, write };
 
     return { id: item.id, capturedAt: item.capturedAt };
+  }
+
+  /**
+   * Transcribes dictated audio.
+   *
+   * Deliberately has no path to the inbox. A transcript can only be stored by
+   * being placed in the capture box and explicitly submitted, which is what
+   * makes "never stored unseen" structural rather than a convention a client
+   * could forget to follow.
+   *
+   * The audio is not retained after this returns.
+   */
+  async transcribe(wav: Uint8Array): Promise<TranscribeResult> {
+    let text: string;
+    try {
+      text = await this.transcription.transcribe(wav);
+    } catch (err) {
+      return {
+        status: "failed",
+        message: err instanceof Error ? err.message : "Transcription failed.",
+      };
+    }
+
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+      // Silence or unintelligible noise is a valid outcome, not an error.
+      return { status: "no-speech" };
+    }
+
+    return { status: "ok", text: trimmed };
   }
 
   /** The id of the currently undoable capture, if any. */
