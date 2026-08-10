@@ -1,6 +1,7 @@
 import type { Clock, InboxStore, TranscriptionPort } from "../ports/index";
 import type { InboxWriteError } from "../errors";
 import { AppendQueue, type AppendResult } from "../inbox/append-queue";
+import { performUndo } from "./undo-token";
 import { serializeItem } from "../inbox/serialize";
 import { createCaptureItem, type CaptureSource } from "./capture-item";
 
@@ -8,6 +9,10 @@ export interface SubmitResult {
   id: string;
   capturedAt: Date;
 }
+
+export type UndoResult =
+  | { ok: true }
+  | { ok: false; reason: "expired" | "file-changed" | "unknown-id" };
 
 export type TranscribeResult =
   | { status: "ok"; text: string }
@@ -43,9 +48,11 @@ export class CaptureService {
   private readonly queue: AppendQueue;
   private readonly clock: Clock;
   private readonly transcription: TranscriptionPort;
+  private readonly inbox: InboxStore;
   private undoWindow: UndoWindow | undefined;
 
   constructor(deps: CaptureServiceDeps) {
+    this.inbox = deps.inbox;
     this.queue = new AppendQueue(deps.inbox, deps.onError);
     this.clock = deps.clock ?? systemClock;
     this.transcription = deps.transcription;
@@ -68,9 +75,13 @@ export class CaptureService {
     // error still reaches the user through the queue's onError handler.
     write.catch(() => undefined);
 
-    // Opening a new window closes the previous one: only the most recent
-    // capture is ever undoable.
-    this.undoWindow = { id: item.id, block, source, text: item.text, write };
+    // Every capture closes the previous undo window, so only the most recent
+    // one is ever undoable. Only dictated captures open a new one: FR-009
+    // scopes undo to transcription errors, and FR-018 bounds it there.
+    this.undoWindow =
+      source === "dictated"
+        ? { id: item.id, block, source, text: item.text, write }
+        : undefined;
 
     return { id: item.id, capturedAt: item.capturedAt };
   }
@@ -105,9 +116,50 @@ export class CaptureService {
     return { status: "ok", text: trimmed };
   }
 
+  /**
+   * Removes a just-dictated capture from the inbox.
+   *
+   * Refusal is returned as a value rather than thrown, because refusing is an
+   * expected outcome: if the file changed underneath us, the safe answer is to
+   * leave it alone. Callers must show the captured text alongside a refusal so
+   * the thought stays recoverable.
+   */
+  async undo(id: string): Promise<UndoResult> {
+    const window = this.undoWindow;
+    if (!window) return { ok: false, reason: "expired" };
+    if (window.id !== id) return { ok: false, reason: "unknown-id" };
+
+    // The append may still be in flight; undo must not race it.
+    let offsetBefore: number;
+    try {
+      ({ offsetBefore } = await window.write);
+    } catch {
+      // The write failed, so there is nothing on disk to undo.
+      this.undoWindow = undefined;
+      return { ok: false, reason: "file-changed" };
+    }
+
+    const outcome = await performUndo(this.inbox, {
+      itemId: window.id,
+      serializedBlock: window.block,
+      offsetBefore,
+    });
+
+    if (outcome.ok) {
+      this.undoWindow = undefined;
+      return { ok: true };
+    }
+    return outcome;
+  }
+
   /** The id of the currently undoable capture, if any. */
   undoableId(): string | undefined {
     return this.undoWindow?.id;
+  }
+
+  /** The text of the currently undoable capture, for a recoverable refusal. */
+  undoableText(): string | undefined {
+    return this.undoWindow?.text;
   }
 
   /** Closes the undo window without touching the inbox. */

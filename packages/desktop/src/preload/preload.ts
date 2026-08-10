@@ -32,6 +32,10 @@ const api = {
     );
   },
 
+  undo(id: string): Promise<{ ok: boolean; reason?: string }> {
+    return ipcRenderer.invoke("capture:undo", id);
+  },
+
   dismiss(): void {
     ipcRenderer.send("capture:dismiss");
   },

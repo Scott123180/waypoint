@@ -153,19 +153,19 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 ### Tests for User Story 3 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
 
-- [ ] T056 [P] [US3] Failing tests for `UndoToken`: tail matches → truncates to `offsetBefore`; tail differs → refuses and modifies nothing; only one token live at a time — in `packages/core/tests/undo-token.test.ts`
-- [ ] T057 [P] [US3] Failing tests for `CaptureService.undo` returning `expired`, `file-changed`, and `unknown-id` as **values rather than throws**, since refusal is an expected outcome; and that no token is issued for a typed capture — in `packages/core/tests/capture-service.undo.test.ts`
-- [ ] T058 [P] [US3] Failing contract tests for `FsInboxStore.size`, `readTail`, and `truncate` against a real temp directory: byte-accurate tail reads across multi-byte UTF-8, truncation restores the exact prior file bytes, and a concurrent hand-edit is detected rather than clobbered — in `packages/desktop/tests/fs-inbox-store-undo.test.ts`
-- [ ] T059 [P] [US3] Failing E2E: undo removes the item and leaves the file otherwise byte-identical; after a hand-edit, undo refuses and the hand-added line survives — in `packages/desktop/tests/e2e/undo.spec.ts`
-- [ ] T060 [P] [US3] Failing E2E: after dictating and submitting, the user can immediately trigger the next capture with no wait, block, or forced acknowledgement (FR-010, SC-005) — in `packages/desktop/tests/e2e/non-blocking-correction.spec.ts`
+- [X] T056 [P] [US3] Failing tests for `UndoToken`: tail matches → truncates to `offsetBefore`; tail differs → refuses and modifies nothing; only one token live at a time — in `packages/core/tests/undo-token.test.ts`
+- [X] T057 [P] [US3] Failing tests for `CaptureService.undo` returning `expired`, `file-changed`, and `unknown-id` as **values rather than throws**, since refusal is an expected outcome; and that no token is issued for a typed capture — in `packages/core/tests/capture-service.undo.test.ts`
+- [X] T058 [P] [US3] Failing contract tests for `FsInboxStore.size`, `readTail`, and `truncate` against a real temp directory: byte-accurate tail reads across multi-byte UTF-8, truncation restores the exact prior file bytes, and a concurrent hand-edit is detected rather than clobbered — in `packages/desktop/tests/fs-inbox-store-undo.test.ts`
+- [X] T059 [P] [US3] Failing E2E: undo removes the item and leaves the file otherwise byte-identical; after a hand-edit, undo refuses and the hand-added line survives — in `packages/desktop/tests/e2e/undo.spec.ts`
+- [X] T060 [P] [US3] Failing E2E: after dictating and submitting, the user can immediately trigger the next capture with no wait, block, or forced acknowledgement (FR-010, SC-005) — in `packages/desktop/tests/e2e/non-blocking-correction.spec.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T061 [P] [US3] Implement `UndoToken` verified-truncation logic in `packages/core/src/capture/undo-token.ts` (satisfies T056)
-- [ ] T062 [US3] Implement `CaptureService.undo` and undo-window expiry (box close or next capture) in `packages/core/src/capture/capture-service.ts` (satisfies T057; depends on T061)
-- [ ] T063 [US3] Implement `size`, `readTail`, and `truncate` in `packages/desktop/src/main/adapters/fs-inbox-store.ts` — the methods deferred in T025 (satisfies T058)
-- [ ] T064 [US3] Add the `capture:undo` IPC channel in `packages/desktop/src/main/ipc.ts` and the undo affordance in `packages/desktop/src/renderer/capture.ts`, offered for dictated captures only and never blocking the next capture (satisfies T059, T060)
-- [ ] T065 [US3] Implement the refusal notice in `packages/desktop/src/renderer/capture.ts`: on `file-changed`, show the reason **together with the captured text** so the thought remains recoverable by copy/paste (satisfies T059)
+- [X] T061 [P] [US3] Implement `UndoToken` verified-truncation logic in `packages/core/src/capture/undo-token.ts` (satisfies T056)
+- [X] T062 [US3] Implement `CaptureService.undo` and undo-window expiry (box close or next capture) in `packages/core/src/capture/capture-service.ts` (satisfies T057; depends on T061)
+- [X] T063 [US3] Implement `size`, `readTail`, and `truncate` in `packages/desktop/src/main/adapters/fs-inbox-store.ts` — the methods deferred in T025 (satisfies T058)
+- [X] T064 [US3] Add the `capture:undo` IPC channel in `packages/desktop/src/main/ipc.ts` and the undo affordance in `packages/desktop/src/renderer/capture.ts`, offered for dictated captures only and never blocking the next capture (satisfies T059, T060)
+- [X] T065 [US3] Implement the refusal notice in `packages/desktop/src/renderer/capture.ts`: on `file-changed`, show the reason **together with the captured text** so the thought remains recoverable by copy/paste (satisfies T059)
 
 **Checkpoint**: All three user stories independently functional. Quickstart scenarios 6, 7, 8, 12 pass.
 

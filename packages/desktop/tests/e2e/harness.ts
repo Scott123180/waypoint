@@ -16,6 +16,9 @@ export interface Harness {
   dictate(transcript: string): Promise<void>;
   /** Drives the dictation path to a transcription failure. */
   dictateFailure(message: string): Promise<void>;
+  /** Undoes the currently undoable capture, as the undo affordance would. */
+  undo(): Promise<{ ok: boolean; reason?: string }>;
+  undoableId(): Promise<string | undefined>;
   captureBox(): Promise<Page>;
   isBoxVisible(): Promise<boolean>;
   inbox(): string;
@@ -94,6 +97,16 @@ export async function launch(options: { hotkey?: string } = {}): Promise<Harness
     async isBoxVisible() {
       return app.evaluate(() => {
         return (globalThis as Record<string, any>)["__waypoint"].isCaptureVisible();
+      });
+    },
+    async undo() {
+      return app.evaluate(async () => {
+        return (globalThis as Record<string, any>)["__waypoint"].undoLatest();
+      });
+    },
+    async undoableId() {
+      return app.evaluate(() => {
+        return (globalThis as Record<string, any>)["__waypoint"].undoableId();
       });
     },
     inbox() {

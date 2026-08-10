@@ -22,6 +22,7 @@ type TranscribeResponse =
 interface WaypointApi {
   submit(text: string, source: "typed" | "dictated"): Promise<SubmitResponse>;
   transcribe(samples: Float32Array, sampleRate: number): Promise<TranscribeResponse>;
+  undo(id: string): Promise<{ ok: boolean; reason?: string }>;
   dismiss(): void;
   onReset(callback: () => void): void;
   onNotice(callback: (notice: Notice) => void): void;
@@ -64,16 +65,22 @@ function showNotice(next: Notice): void {
 
 function reset(): void {
   input.value = "";
+  hasTranscript = false;
   clearNotice();
   focusInput();
 }
 
+
+/** Text currently in the box came from dictation and has not been retyped. */
+let hasTranscript = false;
+
 async function submit(): Promise<void> {
   const text = input.value;
+  const source = hasTranscript ? "dictated" : "typed";
 
-  // Hide first, without awaiting the result. Waiting on the round-trip here
-  // would put disk latency back on the path this whole design keeps clear.
-  const pending = window.waypoint.submit(text, "typed");
+  // Not awaited before hiding: waiting on the round-trip here would put disk
+  // latency back on the path this whole design keeps clear.
+  const pending = window.waypoint.submit(text, source);
 
   const result = await pending;
   if (!result.ok && result.error === "empty") {
@@ -82,7 +89,13 @@ async function submit(): Promise<void> {
     return;
   }
 
+  // A dictated capture stays undoable from the tray until the next capture
+  // begins. The affordance lives there rather than here because the box closes
+  // on submit (FR-013), so an in-box button would never be seen — and keeping
+  // the box open to show one would be exactly the blocking step FR-010 forbids.
+
   input.value = "";
+  hasTranscript = false;
   window.waypoint.dismiss();
 }
 
@@ -121,6 +134,7 @@ function applyTranscription(result: TranscribeResponse): void {
   if (result.status === "ok") {
     clearNotice();
     insertTranscript(result.text);
+    hasTranscript = true;
     return;
   }
 

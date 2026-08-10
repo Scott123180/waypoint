@@ -58,8 +58,34 @@ function start(): void {
 
   const showCapture = (): void => captureWindow.show();
 
+  const undoLatest = async (): Promise<{ ok: boolean; reason?: string }> => {
+    const id = service.undoableId();
+    if (!id) return { ok: false, reason: "expired" };
+
+    const lastText = service.undoableText() ?? "";
+    const outcome = await service.undo(id);
+
+    if (!outcome.ok && outcome.reason === "file-changed") {
+      // Refusing is the safe answer, but the thought must stay recoverable, so
+      // bring the box forward with the captured text visible.
+      captureWindow.show();
+      emitNotice({
+        level: "error",
+        message:
+          "Your inbox changed since that was saved, so it was left alone. " +
+          "Here is what was captured:",
+        recoverableText: lastText,
+      });
+    }
+    return outcome;
+  };
+
   const hotkey = registerHotkey(config.hotkey, showCapture, globalShortcut, emitNotice);
-  tray = createTray(showCapture);
+  tray = createTray({
+    onCapture: showCapture,
+    onUndo: () => void undoLatest(),
+    canUndo: () => service.undoableId() !== undefined,
+  });
 
   if (problem) {
     emitNotice({ level: "error", message: problem });
@@ -92,6 +118,8 @@ function start(): void {
       trayClick: showCapture,
       isCaptureVisible: () => captureWindow.isVisible(),
       hotkeyRegistered: () => hotkey.registered,
+      undoableId: () => service.undoableId(),
+      undoLatest,
       // CI has no microphone, so the suite feeds a canned result through the
       // real transcribe → insert path instead of capturing audio.
       fakeDictation: async (input: { text?: string; error?: string }) => {

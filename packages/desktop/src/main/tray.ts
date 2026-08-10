@@ -1,26 +1,42 @@
 import { Menu, Tray, nativeImage, app } from "electron";
 
+export interface TrayActions {
+  onCapture: () => void;
+  /** Undoes the most recent dictated capture, if one is still undoable. */
+  onUndo: () => void;
+  /** Whether an undoable capture currently exists. */
+  canUndo: () => boolean;
+}
+
 /**
- * The in-app entry point (FR-002).
+ * The in-app entry point (FR-002) and the home of the undo affordance.
  *
  * The app runs as a background agent with the dock icon hidden, so if the
  * global hotkey fails to register this is the *only* way to reach capture.
  * It therefore must not depend on the hotkey path in any way.
+ *
+ * Undo lives here rather than in the capture box because the box closes on
+ * submit (FR-013); keeping it open to show an undo button would be exactly the
+ * blocking step FR-010 forbids.
  */
-export function createTray(onCapture: () => void): Tray | undefined {
+export function createTray(actions: TrayActions): Tray | undefined {
   try {
     const tray = new Tray(nativeImage.createEmpty());
     tray.setToolTip("Waypoint — capture a thought");
 
-    tray.setContextMenu(
+    const buildMenu = (): Menu =>
       Menu.buildFromTemplate([
-        { label: "Capture a thought", click: onCapture },
+        { label: "Capture a thought", click: actions.onCapture },
+        { label: "Undo last capture", click: actions.onUndo, enabled: actions.canUndo() },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },
-      ]),
-    );
+      ]);
 
-    tray.on("click", onCapture);
+    tray.setContextMenu(buildMenu());
+    // Rebuilt on open so the undo item reflects whether anything is undoable.
+    tray.on("right-click", () => tray.setContextMenu(buildMenu()));
+    tray.on("click", actions.onCapture);
+
     return tray;
   } catch (err) {
     // Some Linux desktops have no system tray at all. That is survivable — the

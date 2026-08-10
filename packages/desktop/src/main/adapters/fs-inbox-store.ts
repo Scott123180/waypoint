@@ -1,4 +1,4 @@
-import { mkdir, open, stat } from "node:fs/promises";
+import { mkdir, open, stat, truncate as fsTruncate } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { InboxStore } from "@waypoint/core";
@@ -38,15 +38,31 @@ export class FsInboxStore implements InboxStore {
   }
 
   async size(): Promise<number> {
-    throw new Error("FsInboxStore.size is implemented in User Story 3 (undo)");
+    try {
+      return (await stat(this.filePath)).size;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return 0;
+      throw err;
+    }
   }
 
-  async readTail(_byteCount: number): Promise<string> {
-    throw new Error("FsInboxStore.readTail is implemented in User Story 3 (undo)");
+  async readTail(byteCount: number): Promise<string> {
+    const size = await this.size();
+    if (size === 0 || byteCount <= 0) return "";
+
+    const length = Math.min(byteCount, size);
+    const handle = await open(this.filePath, "r");
+    try {
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, size - length);
+      return buffer.toString("utf8");
+    } finally {
+      await handle.close();
+    }
   }
 
-  async truncate(_length: number): Promise<void> {
-    throw new Error("FsInboxStore.truncate is implemented in User Story 3 (undo)");
+  async truncate(length: number): Promise<void> {
+    await fsTruncate(this.filePath, length);
   }
 
   private async inspect(): Promise<{ size: number; endsWithNewline: boolean }> {

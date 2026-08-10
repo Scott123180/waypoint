@@ -40,8 +40,15 @@ export function registerIpc(service: CaptureService, window: CaptureWindow): voi
     },
   );
 
+  ipcMain.handle("capture:undo", async (_event, id: string) => {
+    return service.undo(id);
+  });
+
   ipcMain.on("capture:dismiss", () => {
-    service.expireUndoWindow();
+    // Deliberately does NOT expire the undo window. Submitting closes the box
+    // via this same channel, and expiring here would destroy the undo window
+    // the moment it was created. The window expires when the next capture
+    // begins, which submit() handles.
     window.hide();
   });
 }
