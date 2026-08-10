@@ -88,23 +88,23 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 ### Client Tests for User Story 1 ⚠️ WRITE FIRST — MUST FAIL BEFORE IMPLEMENTING
 
-- [ ] T026 [P] [US1] Failing E2E: hotkey shows the pre-warmed box with input already focused, measured under 100ms — in `packages/desktop/tests/e2e/capture-window.spec.ts`
-- [ ] T027 [P] [US1] Failing E2E: pressing the hotkey while the box is open with unsaved text is ignored, leaving the box and its text untouched (FR-003a) — in `packages/desktop/tests/e2e/duplicate-trigger.spec.ts`
-- [ ] T028 [P] [US1] Failing E2E: submit clears and closes the box and appends to the inbox; empty submit creates no item — in `packages/desktop/tests/e2e/submit.spec.ts`
-- [ ] T029 [P] [US1] Failing E2E: the **in-app entry point** opens the capture box without the hotkey (FR-002) — in `packages/desktop/tests/e2e/in-app-trigger.spec.ts`
-- [ ] T030 [P] [US1] Failing unit test: when `globalShortcut.register()` returns false, a `capture:notice` is emitted naming the conflict and how to rebind — in `packages/desktop/tests/hotkey.test.ts`
+- [X] T026 [P] [US1] Failing E2E: hotkey shows the pre-warmed box with input already focused, measured under 100ms — in `packages/desktop/tests/e2e/capture-window.spec.ts`
+- [X] T027 [P] [US1] Failing E2E: pressing the hotkey while the box is open with unsaved text is ignored, leaving the box and its text untouched (FR-003a) — in `packages/desktop/tests/e2e/duplicate-trigger.spec.ts`
+- [X] T028 [P] [US1] Failing E2E: submit clears and closes the box and appends to the inbox; empty submit creates no item — in `packages/desktop/tests/e2e/submit.spec.ts`
+- [X] T029 [P] [US1] Failing E2E: the **in-app entry point** opens the capture box without the hotkey (FR-002) — in `packages/desktop/tests/e2e/in-app-trigger.spec.ts`
+- [X] T030 [P] [US1] Failing unit test: when `globalShortcut.register()` returns false, a `capture:notice` is emitted naming the conflict and how to rebind — in `packages/desktop/tests/hotkey.test.ts`
 
 ### Client Implementation for User Story 1
 
-- [ ] T031 [US1] Implement the pre-warmed hidden capture window in `packages/desktop/src/main/capture-window.ts`: created once at startup with `show: false`, `backgroundThrottling: false`, visible on all workspaces and over fullscreen (satisfies T026)
-- [ ] T032 [US1] Implement duplicate-trigger suppression in `packages/desktop/src/main/capture-window.ts`: `showCapture()` is a no-op when the window is already visible, so in-progress text is never cleared (satisfies T027, FR-003a)
-- [ ] T033 [US1] Implement global hotkey registration in `packages/desktop/src/main/hotkey.ts`, emitting a visible actionable notice when `register()` returns false because the combination is taken (satisfies T030)
-- [ ] T034 [US1] Implement the in-app entry point in `packages/desktop/src/main/tray.ts`: a tray/menu-bar icon whose click and "Capture" menu item call `showCapture()`, plus `app.on('activate')` and `second-instance` handlers. **This is the only way in when hotkey registration fails (research.md R3), so it must not depend on the hotkey path** (satisfies T029, FR-002)
-- [ ] T035 [US1] Implement the preload bridge exposing exactly `window.waypoint` in `packages/desktop/src/preload/preload.ts` (`contextIsolation: true`, `nodeIntegration: false`)
-- [ ] T036 [US1] Implement IPC handlers `capture:submit`, `capture:dismiss`, `capture:reset`, `capture:notice` in `packages/desktop/src/main/ipc.ts` as thin pass-throughs per [contracts/ipc.md](contracts/ipc.md) — add no channel that lets the renderer set a timestamp or write the inbox (satisfies T028)
-- [ ] T037 [US1] Implement the capture box UI in `packages/desktop/src/renderer/index.html` and `packages/desktop/src/renderer/capture.ts` — hides on send **without awaiting** the submit promise, clears/refocuses on `capture:reset`, and renders `capture:notice` non-modally (satisfies T028)
-- [ ] T038 [US1] Wire app lifecycle in `packages/desktop/src/main/main.ts`: background agent (`app.dock.hide()` on macOS, with the tray icon from T034 as the visible affordance), window pre-warm at startup, `CaptureService.flush()` on `before-quit`
-- [ ] T039 [US1] Add hotkey→focus latency instrumentation behind `WAYPOINT_TRACE_LATENCY` in `packages/desktop/src/main/capture-window.ts` (supports T026, T070)
+- [X] T031 [US1] Implement the pre-warmed hidden capture window in `packages/desktop/src/main/capture-window.ts`: created once at startup with `show: false`, `backgroundThrottling: false`, visible on all workspaces and over fullscreen (satisfies T026)
+- [X] T032 [US1] Implement duplicate-trigger suppression in `packages/desktop/src/main/capture-window.ts`: `showCapture()` is a no-op when the window is already visible, so in-progress text is never cleared (satisfies T027, FR-003a)
+- [X] T033 [US1] Implement global hotkey registration in `packages/desktop/src/main/hotkey.ts`, emitting a visible actionable notice when `register()` returns false because the combination is taken (satisfies T030)
+- [X] T034 [US1] Implement the in-app entry point in `packages/desktop/src/main/tray.ts`: a tray/menu-bar icon whose click and "Capture" menu item call `showCapture()`, plus `app.on('activate')` and `second-instance` handlers. **This is the only way in when hotkey registration fails (research.md R3), so it must not depend on the hotkey path** (satisfies T029, FR-002)
+- [X] T035 [US1] Implement the preload bridge exposing exactly `window.waypoint` in `packages/desktop/src/preload/preload.ts` (`contextIsolation: true`, `nodeIntegration: false`)
+- [X] T036 [US1] Implement IPC handlers `capture:submit`, `capture:dismiss`, `capture:reset`, `capture:notice` in `packages/desktop/src/main/ipc.ts` as thin pass-throughs per [contracts/ipc.md](contracts/ipc.md) — add no channel that lets the renderer set a timestamp or write the inbox (satisfies T028)
+- [X] T037 [US1] Implement the capture box UI in `packages/desktop/src/renderer/index.html` and `packages/desktop/src/renderer/capture.ts` — hides on send **without awaiting** the submit promise, clears/refocuses on `capture:reset`, and renders `capture:notice` non-modally (satisfies T028)
+- [X] T038 [US1] Wire app lifecycle in `packages/desktop/src/main/main.ts`: background agent (`app.dock.hide()` on macOS, with the tray icon from T034 as the visible affordance), window pre-warm at startup, `CaptureService.flush()` on `before-quit`
+- [X] T039 [US1] Add hotkey→focus latency instrumentation behind `WAYPOINT_TRACE_LATENCY` in `packages/desktop/src/main/capture-window.ts` (supports T026, T070)
 
 **Checkpoint**: Text capture fully works end-to-end via both entry points. Quickstart scenarios 1–4, 9, 10, 11 pass. This is a shippable MVP.
 

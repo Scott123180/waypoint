@@ -14,7 +14,7 @@
   "scripts": {
     "build:core": "tsc -p packages/core",
     "build:desktop": "tsc -p packages/desktop && npm run build:renderer",
-    "build:renderer": "test -d packages/desktop/src/renderer && ls packages/desktop/src/renderer/*.ts >/dev/null 2>&1 && tsc -p packages/desktop/tsconfig.renderer.json || echo '(no renderer sources yet, skipping)'",
+    "build:renderer": "tsc -p packages/desktop/tsconfig.renderer.json && cp packages/desktop/src/renderer/index.html packages/desktop/dist/src/renderer/index.html",
     "build": "npm run build:core && npm run build:desktop",
     "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/desktop --noEmit",
     "test": "npm run build && node --test \"packages/*/dist/tests/**/*.test.js\"",
@@ -24,7 +24,9 @@
     "dev": "npm run build && electron packages/desktop/dist/src/main/main.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.2",
+    "electron": "^33.4.11",
     "typescript": "^5.7.2"
   }
 }

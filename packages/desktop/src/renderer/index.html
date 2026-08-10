@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self';" />
+    <title>Waypoint Capture</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --border: #d8d8d8;
+        --error: #a4262c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --fg: #f2f2f2;
+          --muted: #9a9a9a;
+          --border: #3a3a3a;
+          --error: #ff9a9a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      #capture-input {
+        flex: 1;
+        width: 100%;
+        border: 0;
+        outline: 0;
+        resize: none;
+        padding: 16px 18px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+      }
+      #capture-input::placeholder { color: var(--muted); }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 18px 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #notice {
+        display: none;
+        padding: 8px 18px;
+        font-size: 12.5px;
+        color: var(--error);
+        border-top: 1px solid var(--border);
+      }
+      #notice.visible { display: block; }
+      #notice .recoverable {
+        display: block;
+        margin-top: 4px;
+        color: var(--fg);
+        user-select: text;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea
+      id="capture-input"
+      placeholder="What's on your mind?"
+      autofocus
+      spellcheck="false"
+    ></textarea>
+    <footer>
+      <span>Enter to save &middot; Shift+Enter for a new line &middot; Esc to dismiss</span>
+    </footer>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <script type="module" src="./capture.js"></script>
+  </body>
+</html>
