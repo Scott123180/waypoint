@@ -22,12 +22,14 @@
     "test:core": "npm run build:core && node --test \"packages/core/dist/tests/**/*.test.js\"",
     "test:e2e": "npm run build && playwright test",
     "test:whisper": "npm run build && WAYPOINT_WHISPER_INTEGRATION=1 node --test packages/desktop/dist/tests/whisper-integration.test.js",
-    "dev": "npm run build && electron packages/desktop/dist/src/main/main.js"
+    "dev": "npm run build && electron packages/desktop/dist/src/main/main.js",
+    "package": "npm run build && electron-builder --config packages/desktop/electron-builder.yml --publish never"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^22.10.2",
     "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "typescript": "^5.7.2"
   }
 }

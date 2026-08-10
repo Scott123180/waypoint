@@ -1,0 +1,47 @@
+appId: dev.waypoint.app
+productName: Waypoint
+copyright: Waypoint
+
+directories:
+  output: ../../release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+  - "!dist/tests/**"
+  - "!**/*.map"
+
+extraMetadata:
+  main: dist/src/main/main.js
+
+# The whisper binary and model ship inside the artifact rather than being
+# downloaded on first run: voice is core functionality, and the constitution
+# forbids core functionality depending on the network.
+extraResources:
+  - from: ../../resources/whisper
+    to: whisper
+    filter:
+      - "**/*"
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.productivity
+  # Background agent: no dock icon, summoned by hotkey or the menu-bar item.
+  extendInfo:
+    LSUIElement: true
+    NSMicrophoneUsageDescription: >-
+      Waypoint transcribes your dictated thoughts on this device. Audio is never
+      recorded to disk and never leaves your Mac.
+  # Signing and notarization are deliberately deferred; first launch needs a
+  # Gatekeeper bypass (right-click → Open).
+  identity: null
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: Utility
+  synopsis: Local-first, plain-text capture

@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-14 is Apple Silicon. Per the project's build-machine rule, this
+          # is the only place macOS artifacts are produced — the work MacBook
+          # never compiles or installs anything.
+          - os: macos-14
+            arch: arm64
+          - os: ubuntu-latest
+            arch: x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Cache whisper.cpp build and model
+        id: whisper-cache
+        uses: actions/cache@v4
+        with:
+          path: resources/whisper
+          # Bump WHISPER_TAG in the script to invalidate.
+          key: whisper-${{ matrix.os }}-${{ hashFiles('scripts/fetch-whisper.sh') }}
+
+      - name: Build whisper.cpp and fetch model
+        if: steps.whisper-cache.outputs.cache-hit != 'true'
+        env:
+          # Pinned so a silently changed upstream artifact cannot enter the bundle.
+          MODEL_SHA256: ${{ vars.WHISPER_MODEL_SHA256 }}
+        run: ./scripts/fetch-whisper.sh
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Package
+        run: npx electron-builder --config packages/desktop/electron-builder.yml --publish never
+        working-directory: packages/desktop
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: waypoint-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            release/*.dmg
+            release/*.AppImage
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          body: |
+            Unsigned builds — macOS requires a Gatekeeper bypass on first launch
+            (right-click → Open). Signing and notarization are deferred.
+          generate_release_notes: true

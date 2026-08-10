@@ -173,13 +173,13 @@ imports) and `packages/desktop/` (Electron thin client + adapters).
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T066 [P] Configure `electron-builder` in `packages/desktop/electron-builder.yml` with `extraResources` for the whisper binary and model, targeting macOS arm64 (DMG) and Linux x64 (AppImage)
-- [ ] T067 [P] Create `.github/workflows/release.yml` building on `macos-14` (arm64, Metal) and `ubuntu-latest` (x64, CPU) on tag, with cached pinned whisper build and checksum-verified model, publishing release artifacts
-- [ ] T068 [P] Write `README.md` covering setup, the nvm-managed Node 22 requirement, `fetch-whisper.sh`, and the ROADMAP build-machine rule (work MacBook downloads artifacts only, never compiles)
-- [ ] T069 [P] Audit that all notices are non-modal and never block the input field, across `packages/desktop/src/renderer/capture.ts`
-- [ ] T070 Run the full [quickstart.md](quickstart.md) validation, scenarios 1–12, on the Linux dev machine
-- [ ] T071 Download the CI-built macOS artifact on the MacBook and re-run quickstart scenarios 1, 5, 9, and 11 **with the network off** to prove the bundled model needs no download (Principle III)
-- [ ] T072 Verify constitution compliance: core has zero Electron imports, no domain logic in `renderer/`, no network calls on any path, inbox readable with no app running
+- [X] T066 [P] Configure `electron-builder` in `packages/desktop/electron-builder.yml` with `extraResources` for the whisper binary and model, targeting macOS arm64 (DMG) and Linux x64 (AppImage)
+- [X] T067 [P] Create `.github/workflows/release.yml` building on `macos-14` (arm64, Metal) and `ubuntu-latest` (x64, CPU) on tag, with cached pinned whisper build and checksum-verified model, publishing release artifacts
+- [X] T068 [P] Write `README.md` covering setup, the nvm-managed Node 22 requirement, `fetch-whisper.sh`, and the ROADMAP build-machine rule (work MacBook downloads artifacts only, never compiles)
+- [X] T069 [P] Audit that all notices are non-modal and never block the input field, across `packages/desktop/src/renderer/capture.ts`
+- [~] T070 Run the full [quickstart.md](quickstart.md) validation, scenarios 1–12, on the Linux dev machine — **partially done**: scenarios 1, 3, 4, 6, 7, 8, 9, 11, 12 are covered by the automated E2E suite and pass. Scenarios 2 (hand-timed latency), 5 (real microphone, network off), and 10 (visual check for organizing prompts) need a human at the desktop.
+- [ ] T071 **BLOCKED — needs a Mac and a CI run.** Download the CI-built macOS artifact on the MacBook and re-run quickstart scenarios 1, 5, 9, and 11 **with the network off** to prove the bundled model needs no download (Principle III)
+- [X] T072 Verify constitution compliance: core has zero Electron imports, no domain logic in `renderer/`, no network calls on any path, inbox readable with no app running
 
 ---
 
