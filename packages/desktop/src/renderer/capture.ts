@@ -238,13 +238,28 @@ input.addEventListener("keydown", (event: KeyboardEvent) => {
  *
  * Never replaces what the user already typed, and never submits on its own —
  * the transcript becomes an item only when the user chooses to save it.
+ *
+ * Transcripts arrive trimmed, so inserting one flush against neighbouring text
+ * runs the words together — dictating twice produced `spike?This`. A single
+ * space is added on whichever side needs one, and only there: an existing space
+ * or newline already separates, and padding an empty box would put a leading
+ * space into the inbox verbatim.
  */
 function insertTranscript(text: string): void {
   const start = input.selectionStart ?? input.value.length;
   const end = input.selectionEnd ?? start;
 
-  input.value = input.value.slice(0, start) + text + input.value.slice(end);
-  const caret = start + text.length;
+  const before = input.value.slice(0, start);
+  const after = input.value.slice(end);
+
+  const lead = before.length > 0 && !/\s$/.test(before) ? " " : "";
+  const trail = after.length > 0 && !/^\s/.test(after) ? " " : "";
+
+  input.value = before + lead + text + trail + after;
+
+  // Caret sits at the end of the spoken words, not after the trailing padding,
+  // so typing straight after dictating continues the sentence just spoken.
+  const caret = start + lead.length + text.length;
   input.setSelectionRange(caret, caret);
   input.focus();
 }
