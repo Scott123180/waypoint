@@ -44,6 +44,15 @@ needs no download — so a missing toolchain never blocks the model and vice ver
 | `npm run dev` | Build and launch the app |
 | `npm run package` | Build a distributable (normally done by CI) |
 
+### A note on `--no-sandbox`
+
+`npm run dev` passes `--no-sandbox`. On Ubuntu 23.10+ npm cannot set the SUID bit on
+Electron's `chrome-sandbox` helper, and `kernel.apparmor_restrict_unprivileged_userns=1`
+blocks the fallback, so Electron refuses to start without it. The alternative is
+`sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 …`,
+which every `npm install` undoes. The flag applies to local development only — packaged
+builds are unaffected.
+
 ## Using it
 
 The app runs in the background with no dock icon. Press
