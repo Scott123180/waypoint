@@ -17,7 +17,7 @@
     "build:fixtures": "mkdir -p packages/desktop/dist/tests/fixtures && cp packages/desktop/tests/fixtures/* packages/desktop/dist/tests/fixtures/ && chmod +x packages/desktop/dist/tests/fixtures/*.sh",
     "build:renderer": "tsc -p packages/desktop/tsconfig.renderer.json && cp packages/desktop/src/renderer/index.html packages/desktop/dist/src/renderer/index.html",
     "build": "npm run build:core && npm run build:desktop",
-    "typecheck": "tsc -p packages/core --noEmit && tsc -p packages/desktop --noEmit",
+    "typecheck": "npm run build:core && tsc -p packages/desktop --noEmit && tsc -p packages/desktop/tsconfig.renderer.json --noEmit",
     "test": "npm run build && node --test \"packages/*/dist/tests/**/*.test.js\"",
     "test:core": "npm run build:core && node --test \"packages/core/dist/tests/**/*.test.js\"",
     "test:e2e": "npm run build && playwright test",
