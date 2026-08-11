@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { FsInboxStore } from "../src/main/adapters/fs-inbox-store";
+import { InboxMutex } from "../src/main/inbox-mutex";
 
 let dir: string;
 let inboxPath: string;
@@ -20,7 +21,7 @@ afterEach(() => {
 
 describe("FsInboxStore.append", () => {
   test("creates the file when absent", async () => {
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     await store.append("- a thought\n");
 
     assert.equal(readFileSync(inboxPath, "utf8"), "- a thought\n");
@@ -28,7 +29,7 @@ describe("FsInboxStore.append", () => {
 
   test("creates missing parent directories", async () => {
     const nested = join(dir, "deep", "nested", "inbox.md");
-    const store = new FsInboxStore(nested);
+    const store = new FsInboxStore(nested, new InboxMutex());
     await store.append("- a thought\n");
 
     assert.ok(existsSync(nested));
@@ -37,7 +38,7 @@ describe("FsInboxStore.append", () => {
 
   test("appends to the end, leaving earlier content alone", async () => {
     writeFileSync(inboxPath, "- older thought\n");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     await store.append("- newer thought\n");
 
     assert.equal(readFileSync(inboxPath, "utf8"), "- older thought\n- newer thought\n");
@@ -45,14 +46,14 @@ describe("FsInboxStore.append", () => {
 
   test("reports the byte offset before the write", async () => {
     writeFileSync(inboxPath, "- older\n");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
 
     const { offsetBefore } = await store.append("- newer\n");
     assert.equal(offsetBefore, 8);
   });
 
   test("reports offset 0 for a file that did not exist", async () => {
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     const { offsetBefore } = await store.append("- first\n");
     assert.equal(offsetBefore, 0);
   });
@@ -61,7 +62,7 @@ describe("FsInboxStore.append", () => {
     // A hand-edited file often ends without a newline. Appending blindly would
     // graft our item onto the end of the user's last line.
     writeFileSync(inboxPath, "- hand written, no trailing newline");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     await store.append("- ours\n");
 
     assert.equal(
@@ -82,7 +83,7 @@ describe("FsInboxStore.append", () => {
     ].join("\n");
     writeFileSync(inboxPath, handWritten);
 
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     await store.append("- appended\n");
 
     const after = readFileSync(inboxPath, "utf8");
@@ -92,14 +93,14 @@ describe("FsInboxStore.append", () => {
 
   test("counts offsets in bytes, not characters", async () => {
     writeFileSync(inboxPath, "- café\n");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
 
     const { offsetBefore } = await store.append("- next\n");
     assert.equal(offsetBefore, 8);
   });
 
   test("keeps concurrent appends intact and ordered per call", async () => {
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     await Promise.all([
       store.append("- one\n"),
       store.append("- two\n"),

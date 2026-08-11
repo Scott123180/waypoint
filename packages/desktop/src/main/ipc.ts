@@ -1,6 +1,12 @@
 import { ipcMain } from "electron";
 
-import { CaptureService, EmptyCaptureError } from "@waypoint/core";
+import {
+  CaptureService,
+  EmptyCaptureError,
+  type ItemRef,
+  type SortDecision,
+  type SortService,
+} from "@waypoint/core";
 
 import { toWhisperWav } from "./audio-encode";
 import type { CaptureWindow } from "./capture-window";
@@ -14,7 +20,13 @@ export type SubmitResponse = { ok: true; id: string } | { ok: false; error: "emp
  * timestamp, write the inbox directly, or store a transcript unseen. The
  * client cannot hold domain logic it has no way to express.
  */
-export function registerIpc(service: CaptureService, window: CaptureWindow): void {
+export function registerIpc(
+  service: CaptureService,
+  window: CaptureWindow,
+  sort?: SortService,
+): void {
+  if (sort) registerSortIpc(sort, service);
+
   ipcMain.handle(
     "capture:transcribe",
     async (_event, samples: Float32Array, sampleRate: number) => {
@@ -54,5 +66,44 @@ export function registerIpc(service: CaptureService, window: CaptureWindow): voi
     // the moment it was created. The window expires when the next capture
     // begins, which submit() handles.
     window.hide();
+  });
+}
+
+/**
+ * Sort channels. Every one is a pass-through to `SortService`.
+ *
+ * See specs/002-inbox-view-sort/contracts/ipc-sort.md
+ */
+function registerSortIpc(sort: SortService, capture: CaptureService): void {
+  ipcMain.handle("sort:next", async () => {
+    const item = await sort.next();
+    if (!item) return { item: null };
+    return {
+      item: {
+        text: item.text,
+        // Crosses as a string; null stays null so the renderer shows no
+        // timestamp rather than inventing today's date (FR-027a).
+        capturedAt: item.capturedAt ? item.capturedAt.toISOString() : null,
+        ref: item.ref,
+      },
+    };
+  });
+
+  ipcMain.handle("sort:destinations", async () => sort.destinations());
+
+  ipcMain.handle("sort:count", async () => sort.count());
+
+  ipcMain.handle("sort:decide", async (_event, ref: ItemRef, decision: SortDecision) => {
+    const outcome = await sort.sort(ref, decision);
+
+    if (outcome.ok) {
+      // The inbox has been spliced, so any open capture undo window now points
+      // at stale offsets. performUndo already refuses safely in that state
+      // (research R4b); expiring it turns a confusing refusal into no
+      // affordance at all.
+      capture.expireUndoWindow();
+    }
+
+    return outcome;
   });
 }

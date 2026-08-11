@@ -1,12 +1,16 @@
 import { app, globalShortcut, type Tray } from "electron";
 import { join } from "node:path";
 
-import { CaptureService, type InboxWriteError } from "@waypoint/core";
+import { CaptureService, SortService, type InboxWriteError } from "@waypoint/core";
 
 import { FsInboxStore } from "./adapters/fs-inbox-store";
+import { FsInboxDocument } from "./adapters/fs-inbox-document";
+import { FsVaultStore } from "./adapters/fs-vault-store";
+import { FsSortJournal } from "./adapters/fs-sort-journal";
+import { InboxMutex } from "./inbox-mutex";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
-import { configFilePath, currentEnv, loadConfig } from "./config";
+import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
 import { registerIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
@@ -52,8 +56,13 @@ function start(): void {
         modelPath: config.whisperModelPath,
       });
 
+  // One lock, shared by both inbox writers. Sort rebuilds the file and renames
+  // it into place, which orphans the inode capture appends to — without this,
+  // a capture made during a sort is destroyed silently (research R4a).
+  const inboxMutex = new InboxMutex();
+
   const service = new CaptureService({
-    inbox: new FsInboxStore(config.inboxPath),
+    inbox: new FsInboxStore(config.inboxPath, inboxMutex),
     transcription,
     onError: (error: InboxWriteError) =>
       emitNotice({
@@ -63,8 +72,14 @@ function start(): void {
       }),
   });
 
+  const sortService = new SortService({
+    inbox: new FsInboxDocument(config.inboxPath, inboxMutex),
+    vault: new FsVaultStore(config.vaultRoot),
+    journal: new FsSortJournal(sortJournalPath(env)),
+  });
+
   captureWindow.create();
-  registerIpc(service, captureWindow);
+  registerIpc(service, captureWindow, sortService);
 
   const showCapture = (): void => captureWindow.show("type");
   const showCaptureDictating = (): void => captureWindow.show("dictate");

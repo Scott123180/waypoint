@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { defaultConfig, loadConfig, configFilePath, vaultPaths } from "../src/main/config";
+import { defaultConfig, loadConfig, configFilePath, vaultPaths, sortJournalPath } from "../src/main/config";
 import type { ConfigEnv } from "../src/main/config";
 
 let dir: string;
@@ -197,5 +197,34 @@ describe("vaultPaths", () => {
     const paths = vaultPaths(cfg);
     assert.equal(paths.projectsDir, "/srv/v/projects");
     assert.equal(paths.trashPath, "/srv/v/trash.md");
+  });
+});
+
+describe("sortJournalPath", () => {
+  test("lives in the platform state dir on Linux, not in the vault", () => {
+    // The journal is app recovery bookkeeping, not user data: putting it in a
+    // git-tracked vault would add churn and a file the user would wonder
+    // about (research R9).
+    const p = sortJournalPath({ home: "/home/alice", platform: "linux" });
+    assert.equal(p, "/home/alice/.local/state/waypoint/sort-journal.jsonl");
+  });
+
+  test("honours XDG_STATE_HOME", () => {
+    const p = sortJournalPath({
+      home: "/home/alice",
+      platform: "linux",
+      xdgStateHome: "/run/state",
+    });
+    assert.equal(p, "/run/state/waypoint/sort-journal.jsonl");
+  });
+
+  test("uses Application Support on macOS", () => {
+    const p = sortJournalPath({ home: "/Users/alice", platform: "darwin" });
+    assert.equal(p, "/Users/alice/Library/Application Support/waypoint/sort-journal.jsonl");
+  });
+
+  test("is never inside the vault", () => {
+    const env: ConfigEnv = { home: "/home/alice", platform: "linux" };
+    assert.ok(!sortJournalPath(env).startsWith(defaultConfig(env).vaultRoot));
   });
 });

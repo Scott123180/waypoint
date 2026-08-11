@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { FsInboxStore } from "../src/main/adapters/fs-inbox-store";
+import { InboxMutex } from "../src/main/inbox-mutex";
 
 let dir: string;
 let inboxPath: string;
@@ -21,32 +22,32 @@ afterEach(() => {
 describe("FsInboxStore.size", () => {
   test("reports the byte length", async () => {
     writeFileSync(inboxPath, "- a thought\n");
-    assert.equal(await new FsInboxStore(inboxPath).size(), 12);
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).size(), 12);
   });
 
   test("reports zero for a missing file", async () => {
-    assert.equal(await new FsInboxStore(inboxPath).size(), 0);
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).size(), 0);
   });
 
   test("counts bytes, not characters", async () => {
     writeFileSync(inboxPath, "café\n");
-    assert.equal(await new FsInboxStore(inboxPath).size(), 6);
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).size(), 6);
   });
 });
 
 describe("FsInboxStore.readTail", () => {
   test("reads the trailing bytes", async () => {
     writeFileSync(inboxPath, "- earlier\n- ours\n");
-    assert.equal(await new FsInboxStore(inboxPath).readTail(7), "- ours\n");
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).readTail(7), "- ours\n");
   });
 
   test("reads the whole file when asked for more than it holds", async () => {
     writeFileSync(inboxPath, "- short\n");
-    assert.equal(await new FsInboxStore(inboxPath).readTail(999), "- short\n");
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).readTail(999), "- short\n");
   });
 
   test("returns empty for a missing file", async () => {
-    assert.equal(await new FsInboxStore(inboxPath).readTail(10), "");
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).readTail(10), "");
   });
 
   test("reads multi-byte characters back intact", async () => {
@@ -54,14 +55,14 @@ describe("FsInboxStore.readTail", () => {
     writeFileSync(inboxPath, `- earlier\n${block}`);
 
     const bytes = Buffer.byteLength(block, "utf8");
-    assert.equal(await new FsInboxStore(inboxPath).readTail(bytes), block);
+    assert.equal(await new FsInboxStore(inboxPath, new InboxMutex()).readTail(bytes), block);
   });
 });
 
 describe("FsInboxStore.truncate", () => {
   test("cuts the file back to the given length", async () => {
     writeFileSync(inboxPath, "- earlier\n- ours\n");
-    await new FsInboxStore(inboxPath).truncate(10);
+    await new FsInboxStore(inboxPath, new InboxMutex()).truncate(10);
 
     assert.equal(readFileSync(inboxPath, "utf8"), "- earlier\n");
   });
@@ -69,7 +70,7 @@ describe("FsInboxStore.truncate", () => {
   test("restores the file byte-for-byte", async () => {
     const original = "# My inbox\n\n- hand written\n";
     writeFileSync(inboxPath, original);
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
 
     const { offsetBefore } = await store.append("- appended\n");
     await store.truncate(offsetBefore);
@@ -81,7 +82,7 @@ describe("FsInboxStore.truncate", () => {
     // The append adds one; undo must remove that too, not leave it behind.
     const original = "hand written, no trailing newline";
     writeFileSync(inboxPath, original);
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
 
     const { offsetBefore } = await store.append("- appended\n");
     await store.truncate(offsetBefore);
@@ -93,7 +94,7 @@ describe("FsInboxStore.truncate", () => {
 describe("append then undo round trip", () => {
   test("the recorded offset and tail identify exactly what was written", async () => {
     writeFileSync(inboxPath, "- earlier\n");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
 
     const block = "- ours\n";
     const { offsetBefore } = await store.append(block);
@@ -108,7 +109,7 @@ describe("append then undo round trip", () => {
 
   test("a hand edit after the append is detectable", async () => {
     writeFileSync(inboxPath, "- earlier\n");
-    const store = new FsInboxStore(inboxPath);
+    const store = new FsInboxStore(inboxPath, new InboxMutex());
     const block = "- ours\n";
     const { offsetBefore } = await store.append(block);
 

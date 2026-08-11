@@ -3,6 +3,8 @@ import { dirname } from "node:path";
 
 import type { InboxStore } from "@waypoint/core";
 
+import type { InboxMutex } from "../inbox-mutex";
+
 const NEWLINE = 0x0a;
 
 /**
@@ -10,11 +12,32 @@ const NEWLINE = 0x0a;
  *
  * Append-only during capture: existing bytes are never rewritten, so a file the
  * user is editing by hand in another window cannot be clobbered by a capture.
+ *
+ * Writes go through a mutex shared with `FsInboxDocument`. Sort rebuilds this
+ * file and renames it into place, which orphans the inode an append is writing
+ * to — without the lock, a capture made during a sort is destroyed silently
+ * (FR-020e, research R4a).
+ *
+ * This does not make capture block the user. `CaptureService.submit` returns
+ * when the write is enqueued, not when it lands, so only the background drain
+ * ever waits here.
  */
 export class FsInboxStore implements InboxStore {
-  constructor(private readonly filePath: string) {}
+  constructor(
+    private readonly filePath: string,
+    private readonly mutex: InboxMutex,
+  ) {}
 
-  async append(block: string): Promise<{ offsetBefore: number }> {
+  append(block: string): Promise<{ offsetBefore: number }> {
+    return this.mutex.run(() => this.appendLocked(block));
+  }
+
+  /** Truncation is a write too, so undo shares the lock. */
+  truncate(length: number): Promise<void> {
+    return this.mutex.run(() => fsTruncate(this.filePath, length));
+  }
+
+  private async appendLocked(block: string): Promise<{ offsetBefore: number }> {
     await mkdir(dirname(this.filePath), { recursive: true });
 
     const { size, endsWithNewline } = await this.inspect();
@@ -59,10 +82,6 @@ export class FsInboxStore implements InboxStore {
     } finally {
       await handle.close();
     }
-  }
-
-  async truncate(length: number): Promise<void> {
-    await fsTruncate(this.filePath, length);
   }
 
   private async inspect(): Promise<{ size: number; endsWithNewline: boolean }> {

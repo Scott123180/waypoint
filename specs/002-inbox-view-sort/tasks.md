@@ -104,27 +104,27 @@ unsorted byte is unchanged — with no destination creation involved.
 
 ### Filesystem adapters for User Story 1
 
-- [ ] T031 [P] [US1] Failing test: a shared write mutex serializes two overlapping operations and releases on throw, in `packages/desktop/tests/inbox-mutex.test.ts` (FR-020e, research R4a)
-- [ ] T032 [US1] Implement the shared in-process write mutex in `packages/desktop/src/main/inbox-mutex.ts` (FR-020e, research R4a)
-- [ ] T033 [P] [US1] **Failing regression test for the capture-during-sort data-loss path**: interleave a `FsInboxStore.append` with a `FsInboxDocument.removeRange` on the same file and assert the appended item survives the rename, in `packages/desktop/tests/inbox-concurrent-write.test.ts` (FR-020e, SC-005a)
-- [ ] T034 [US1] Make `FsInboxStore` acquire the shared mutex around its append in `packages/desktop/src/main/adapters/fs-inbox-store.ts`, without changing its non-blocking contract — capture still returns on enqueue (FR-020e, Principle VI)
-- [ ] T035 [P] [US1] Failing tests: `removeRange` splices only on exact byte match, returns `mismatch` without writing otherwise, replacement is atomic, and an out-of-process size change before rename triggers a bounded re-read-and-retry rather than a lost write, in `packages/desktop/tests/fs-inbox-document.test.ts` (FR-020a, FR-020b, FR-020e)
-- [ ] T036 [US1] Implement `FsInboxDocument` using the shared mutex plus temp-file-and-`rename`, taking the mutex as a required constructor argument so an unsafe instance cannot be built, in `packages/desktop/src/main/adapters/fs-inbox-document.ts` (FR-020a, FR-020b, FR-020e, research R1/R4a)
-- [ ] T037 [P] [US1] Failing tests: `VaultStore` read/write/list/appendLine, creating missing directories, and appending to a file that lacks a trailing newline, in `packages/desktop/tests/fs-vault-store.test.ts` (FR-029)
-- [ ] T038 [US1] Implement `FsVaultStore` in `packages/desktop/src/main/adapters/fs-vault-store.ts` (FR-029)
-- [ ] T039 [P] [US1] Failing tests: JSON-lines append, `markDestinationWritten`, `clear`, and `pending` surviving a malformed trailing line, in `packages/desktop/tests/fs-sort-journal.test.ts` (FR-020d)
-- [ ] T040 [US1] Implement `FsSortJournal` at the platform state dir per research R9 in `packages/desktop/src/main/adapters/fs-sort-journal.ts` (FR-020d)
+- [X] T031 [P] [US1] Failing test: a shared write mutex serializes two overlapping operations and releases on throw, in `packages/desktop/tests/inbox-mutex.test.ts` (FR-020e, research R4a)
+- [X] T032 [US1] Implement the shared in-process write mutex in `packages/desktop/src/main/inbox-mutex.ts` (FR-020e, research R4a)
+- [X] T033 [P] [US1] **Failing regression test for the capture-during-sort data-loss path**: interleave a `FsInboxStore.append` with a `FsInboxDocument.removeRange` on the same file and assert the appended item survives the rename, in `packages/desktop/tests/inbox-concurrent-write.test.ts` (FR-020e, SC-005a)
+- [X] T034 [US1] Make `FsInboxStore` acquire the shared mutex around its append in `packages/desktop/src/main/adapters/fs-inbox-store.ts`, without changing its non-blocking contract — capture still returns on enqueue (FR-020e, Principle VI)
+- [X] T035 [P] [US1] Failing tests: `removeRange` splices only on exact byte match, returns `mismatch` without writing otherwise, replacement is atomic, and an out-of-process size change before rename triggers a bounded re-read-and-retry rather than a lost write, in `packages/desktop/tests/fs-inbox-document.test.ts` (FR-020a, FR-020b, FR-020e)
+- [X] T036 [US1] Implement `FsInboxDocument` using the shared mutex plus temp-file-and-`rename`, taking the mutex as a required constructor argument so an unsafe instance cannot be built, in `packages/desktop/src/main/adapters/fs-inbox-document.ts` (FR-020a, FR-020b, FR-020e, research R1/R4a)
+- [X] T037 [P] [US1] Failing tests: `VaultStore` read/write/list/appendLine, creating missing directories, and appending to a file that lacks a trailing newline, in `packages/desktop/tests/fs-vault-store.test.ts` (FR-029)
+- [X] T038 [US1] Implement `FsVaultStore` in `packages/desktop/src/main/adapters/fs-vault-store.ts` (FR-029)
+- [X] T039 [P] [US1] Failing tests: JSON-lines append, `markDestinationWritten`, `clear`, and `pending` surviving a malformed trailing line, in `packages/desktop/tests/fs-sort-journal.test.ts` (FR-020d)
+- [X] T040 [US1] Implement `FsSortJournal` at the platform state dir per research R9 in `packages/desktop/src/main/adapters/fs-sort-journal.ts` (FR-020d)
 
 ### Electron client for User Story 1
 
-- [ ] T041 [US1] Add `sort:next`, `sort:destinations`, `sort:decide`, `sort:count`, and `sort:dismiss` handlers as pass-throughs to `SortService` in `packages/desktop/src/main/ipc.ts`, per [contracts/ipc-sort.md](contracts/ipc-sort.md) (FR-005, FR-030)
-- [ ] T042 [US1] Expose `window.waypoint.sort` and nothing else in `packages/desktop/src/preload/preload.ts`
+- [X] T041 [US1] Add `sort:next`, `sort:destinations`, `sort:decide`, `sort:count`, and `sort:dismiss` handlers as pass-throughs to `SortService` in `packages/desktop/src/main/ipc.ts`, per [contracts/ipc-sort.md](contracts/ipc-sort.md) (FR-005, FR-030)
+- [X] T042 [US1] Expose `window.waypoint.sort` and nothing else in `packages/desktop/src/preload/preload.ts`
 - [ ] T043 [US1] Create the sort window in `packages/desktop/src/main/sort-window.ts`
 - [ ] T044 [P] [US1] Create the sort view markup — one item, five choices — in `packages/desktop/src/renderer/sort.html` (FR-004, FR-005)
 - [ ] T045 [US1] Implement renderer input handling and rendering in `packages/desktop/src/renderer/sort.ts`; it must await `sort:decide` before requesting the next item, show no timestamp for a `null` `capturedAt`, and render destinations in the order given (FR-002, FR-003, FR-019, FR-027a, FR-030)
-- [ ] T046 [US1] Construct `SortService` with the three adapters **and the shared mutex** in `packages/desktop/src/main/main.ts` (FR-020e)
+- [X] T046 [US1] Construct `SortService` with the three adapters **and the shared mutex** in `packages/desktop/src/main/main.ts` (FR-020e)
 - [ ] T047 [US1] Add `showSort`, `hideSort`, and `isSortVisible` to the existing `WAYPOINT_E2E` seam in `packages/desktop/src/main/main.ts`
-- [ ] T047a [US1] After a successful `sort:decide`, call the existing `CaptureService.expireUndoWindow()` in `packages/desktop/src/main/ipc.ts`. `performUndo` already refuses safely once the inbox has been spliced (research R4b) — this only replaces a confusing refusal with no affordance at all. Do **not** add a size assertion to `performUndo`; the existing tail arithmetic already excludes every case it would catch
+- [X] T047a [US1] After a successful `sort:decide`, call the existing `CaptureService.expireUndoWindow()` in `packages/desktop/src/main/ipc.ts`. `performUndo` already refuses safely once the inbox has been spliced (research R4b) — this only replaces a confusing refusal with no affordance at all. Do **not** add a size assertion to `performUndo`; the existing tail arithmetic already excludes every case it would catch
 - [ ] T048 [P] [US1] E2E: one item at a time, five destinations, item leaves the inbox and lands in its file; assert no date/time prompt appears on the calendar choice, in `packages/desktop/tests/e2e/sort-basic.spec.ts` (FR-001, FR-004, FR-005, FR-017a, FR-019)
 - [ ] T049 [P] [US1] E2E: a hand-written item is routable and displays no timestamp; a multi-line item moves whole, in `packages/desktop/tests/e2e/sort-handwritten.spec.ts` (FR-003, FR-027, FR-027a)
 - [ ] T050 [P] [US1] E2E: hand-edit the current item's line on disk mid-decision, then decide — expect refusal, re-present, and zero bytes written anywhere, in `packages/desktop/tests/e2e/sort-hand-edit-race.spec.ts` (FR-020a, FR-020b, SC-004a)

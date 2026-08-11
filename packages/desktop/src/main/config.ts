@@ -36,6 +36,8 @@ export interface ConfigEnv {
   platform: NodeJS.Platform | "linux" | "darwin";
   /** Overrides the XDG config root on Linux. */
   xdgConfigHome?: string | undefined;
+  /** Overrides the XDG state root on Linux. */
+  xdgStateHome?: string | undefined;
   /** Where bundled resources live; differs between dev and a packaged app. */
   resourcesDir?: string | undefined;
 }
@@ -55,6 +57,7 @@ export function currentEnv(): ConfigEnv {
     home: homedir(),
     platform: osPlatform(),
     xdgConfigHome: process.env["XDG_CONFIG_HOME"],
+    xdgStateHome: process.env["XDG_STATE_HOME"],
   };
 }
 
@@ -178,4 +181,22 @@ export function vaultPaths(config: WaypointConfig): VaultPaths {
     calendarPath: join(config.vaultRoot, "calendar.md"),
     trashPath: join(config.vaultRoot, "trash.md"),
   };
+}
+
+/**
+ * Where the sort journal lives: the platform *state* directory, deliberately
+ * not the user's vault.
+ *
+ * It is recovery bookkeeping with a lifetime measured in milliseconds. Keeping
+ * it out of the vault keeps the user's git history clean and avoids a file
+ * they would reasonably wonder about (research R9).
+ */
+export function sortJournalPath(env: ConfigEnv): string {
+  if (env.platform === "darwin") {
+    return join(env.home, "Library", "Application Support", "waypoint", "sort-journal.jsonl");
+  }
+  const xdg = env.xdgStateHome && env.xdgStateHome.length > 0
+    ? env.xdgStateHome
+    : join(env.home, ".local", "state");
+  return join(xdg, "waypoint", "sort-journal.jsonl");
 }
