@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir, platform as osPlatform } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { WHISPER_MODEL_FILENAME } from "./resources";
 
@@ -14,6 +14,15 @@ import { WHISPER_MODEL_FILENAME } from "./resources";
 export interface WaypointConfig {
   /** Absolute path to the markdown inbox. Lives outside the app repo. */
   inboxPath: string;
+  /**
+   * Directory holding the whole vault: the inbox plus every sort destination.
+   *
+   * Derived from `inboxPath`'s directory rather than defaulted independently,
+   * so relocating the inbox moves projects, areas, and the running lists with
+   * it instead of scattering them across two directories (research R8a).
+   * An explicit value in the config file overrides the derivation.
+   */
+  vaultRoot: string;
   /** Electron accelerator opening the capture box for typing. */
   hotkey: string;
   /** Electron accelerator opening the capture box already dictating (FR-001a). */
@@ -56,6 +65,7 @@ export function defaultConfig(env: ConfigEnv): WaypointConfig {
   const resources = env.resourcesDir ?? "";
   return {
     inboxPath: join(env.home, "waypoint", "inbox.md"),
+    vaultRoot: join(env.home, "waypoint"),
     // Dictation gets the more prominent combination: it is the mode reached for
     // most, and it is the one that otherwise costs a keystroke *and* a click.
     hotkey: "CommandOrControl+Shift+Enter",
@@ -124,6 +134,19 @@ export function loadConfig(filePath: string, env: ConfigEnv): ConfigLoadResult {
     }
   }
 
+  // Resolved after inboxPath so a relocated inbox takes its vault with it. An
+  // explicit vaultRoot wins; an invalid one falls back to the derivation rather
+  // than to the home-directory default, which would split the vault in two.
+  const rawVaultRoot = record["vaultRoot"];
+  if (rawVaultRoot === undefined) {
+    config.vaultRoot = dirname(config.inboxPath);
+  } else if (typeof rawVaultRoot === "string" && rawVaultRoot.length > 0) {
+    config.vaultRoot = rawVaultRoot;
+  } else {
+    config.vaultRoot = dirname(config.inboxPath);
+    badKeys.push("vaultRoot");
+  }
+
   const result: ConfigLoadResult = { config };
   if (badKeys.length > 0) {
     result.problem =
@@ -131,4 +154,28 @@ export function loadConfig(filePath: string, env: ConfigEnv): ConfigLoadResult {
       `using defaults for those.`;
   }
   return result;
+}
+
+export interface VaultPaths {
+  projectsDir: string;
+  areasDir: string;
+  waitingPath: string;
+  calendarPath: string;
+  trashPath: string;
+}
+
+/**
+ * Every sort destination, derived from one root.
+ *
+ * Centralized so no caller invents its own path. See
+ * specs/002-inbox-view-sort/contracts/vault-format.md
+ */
+export function vaultPaths(config: WaypointConfig): VaultPaths {
+  return {
+    projectsDir: join(config.vaultRoot, "projects"),
+    areasDir: join(config.vaultRoot, "areas"),
+    waitingPath: join(config.vaultRoot, "waiting.md"),
+    calendarPath: join(config.vaultRoot, "calendar.md"),
+    trashPath: join(config.vaultRoot, "trash.md"),
+  };
 }

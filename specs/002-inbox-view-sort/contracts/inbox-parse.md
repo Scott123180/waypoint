@@ -33,7 +33,8 @@ timestamp   := ISO 8601 date-time with UTC offset, seconds precision
 | `- not a timestamp here` | Hand-written item | `null` |
 | `- 2026-13-45T99:99:99-04:00 text` | Hand-written item | `null` — invalid date, no throw |
 | `  continues the line above` | Continuation of the previous item | — |
-| `` (empty) or `   ` | Nothing; belongs to no item | — |
+| `` (empty) or `   `, then an indented line | Blank line *inside* the item above | — |
+| `` (empty) or `   `, then anything else | Nothing; belongs to no item | — |
 
 **The parser never rejects input and never throws.** Every line with text is routable (FR-027), which is
 what lets a hand-assembled inbox reach zero. There is no error path because there is no invalid document.
@@ -41,8 +42,13 @@ what lets a hand-assembled inbox reach zero. There is no error path because ther
 ## Item boundaries
 
 - An item's block runs from the start of its first line through the newline ending its last continuation.
-- A blank line ends the current item's continuations. Blank lines are *not* part of any item's block, so
-  removing an item leaves surrounding blank lines exactly as the user arranged them.
+- A blank line followed by an **indented** line is *interior* to the item, and those blank bytes are part
+  of its block. This is not a nicety: `serialize.ts` writes a dictated thought's paragraph break as a bare
+  newline followed by an indented line, so treating the blank as a terminator would split one captured
+  thought into two items and strip the timestamp off the second half. It also matches ordinary markdown
+  lazy continuation.
+- A blank line followed by unindented content, or by end of file, **ends** the item. Those blank lines
+  belong to no item, so removing an item leaves surrounding spacing exactly as the user arranged it.
 - An indented line with no item above it is a hand-written item in its own right, keeping its leading
   spaces in `raw` but not in `text`.
 

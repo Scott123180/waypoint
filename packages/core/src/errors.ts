@@ -30,3 +30,28 @@ export class InboxWriteError extends Error {
     this.recoverableText = recoverableText;
   }
 }
+
+/**
+ * A vault write failed irrecoverably.
+ *
+ * Carries the item text for the same reason `InboxWriteError` does: when the
+ * write failed, this may be the only remaining copy of the thought, so callers
+ * can show it back rather than dropping it silently.
+ */
+export class VaultWriteError extends Error {
+  readonly recoverableText: string;
+  /** Vault-relative path we were trying to write. */
+  readonly destination: string;
+
+  constructor(
+    message: string,
+    destination: string,
+    recoverableText: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "VaultWriteError";
+    this.destination = destination;
+    this.recoverableText = recoverableText;
+  }
+}

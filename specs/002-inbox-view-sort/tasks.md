@@ -41,9 +41,9 @@ Two-package npm workspace, per [plan.md](plan.md):
 
 **Purpose**: Vault path resolution and test fixtures. No dependencies are added by this feature.
 
-- [ ] T001 [P] Write failing test that `vaultRoot` defaults to the directory containing `inboxPath`, that an explicit `vaultRoot` overrides it, and that a malformed config falls back rather than throwing, in `packages/desktop/tests/config.test.ts` (FR-029, research R8a)
-- [ ] T002 Derive `vaultRoot` from `dirname(inboxPath)` with explicit override, and expose `projects/`, `areas/`, `waiting.md`, `calendar.md`, `trash.md` paths from it, in `packages/desktop/src/main/config.ts` — do **not** introduce a second independent default, which would split the vault for anyone who relocated their inbox (FR-029, research R8a)
-- [ ] T003 [P] Add a `withTempVault()` fixture creating and tearing down an isolated vault directory in `packages/desktop/tests/vault-fixture.ts`
+- [X] T001 [P] Write failing test that `vaultRoot` defaults to the directory containing `inboxPath`, that an explicit `vaultRoot` overrides it, and that a malformed config falls back rather than throwing, in `packages/desktop/tests/config.test.ts` (FR-029, research R8a)
+- [X] T002 Derive `vaultRoot` from `dirname(inboxPath)` with explicit override, and expose `projects/`, `areas/`, `waiting.md`, `calendar.md`, `trash.md` paths from it, in `packages/desktop/src/main/config.ts` — do **not** introduce a second independent default, which would split the vault for anyone who relocated their inbox (FR-029, research R8a)
+- [X] T003 [P] Add a `withTempVault()` fixture creating and tearing down an isolated vault directory in `packages/desktop/tests/vault-fixture.ts`
 
 ---
 
@@ -55,17 +55,17 @@ Two-package npm workspace, per [plan.md](plan.md):
 where correctness lives — it reads a file the user hand-edits, and every downstream guarantee about byte
 preservation rests on it.
 
-- [ ] T004 [P] Declare `InboxDocument`, `VaultStore`, and `SortJournal` interfaces per [contracts/sort-api.md](contracts/sort-api.md) in `packages/core/src/ports/index.ts`, including `removeRange`'s obligation not to discard concurrent appends (FR-020e)
-- [ ] T005 [P] Write failing test that `VaultWriteError` carries `recoverableText`, following `InboxWriteError`'s precedent, in `packages/core/tests/errors.test.ts`
-- [ ] T006 Add `VaultWriteError` to `packages/core/src/errors.ts`
-- [ ] T007 Build in-memory `FakeInboxDocument`, `FakeVaultStore`, and `FakeSortJournal` — each able to simulate mismatch, I/O failure, and a concurrent append — in `packages/core/tests/sort-fakes.ts` (depends on T004)
-- [ ] T008 [P] Write failing classification tests — captured item, hand-written line, two-space continuation, blank line, malformed date treated as hand-written, indented line with no item above it — in `packages/core/tests/inbox-parse.test.ts` (FR-027, FR-027b)
-- [ ] T009 Implement line classification producing `ParsedItem[]` in `packages/core/src/inbox/parse.ts` (FR-001, FR-027, FR-027b)
-- [ ] T010 [P] Write failing byte-offset tests — multi-byte UTF-8 (emoji, accents, CJK) must not shift offsets, missing trailing newline at EOF, `raw` matches the exact slice — in `packages/core/tests/inbox-parse-offsets.test.ts` (FR-020a, FR-023)
-- [ ] T011 Implement byte-offset computation (`start`, `end`, `raw`) in `packages/core/src/inbox/parse.ts` (FR-020a, FR-023)
-- [ ] T012 [P] Write failing round-trip property test asserting `parse(serializeItem(x))` yields one item equal to `x`, over generated text including newlines, markdown syntax, and strings that look like timestamps, in `packages/core/tests/inbox-parse-roundtrip.test.ts` (FR-021, FR-022)
-- [ ] T013 Reconcile `packages/core/src/inbox/parse.ts` with `packages/core/src/inbox/serialize.ts` until the round-trip test passes (FR-021, FR-022)
-- [ ] T014 [P] Declare `ItemRef`, `SortDecision`, `SortOutcome`, and `SortRefusal` types per [contracts/sort-api.md](contracts/sort-api.md) in `packages/core/src/sort/decision.ts` (FR-005, FR-030)
+- [X] T004 [P] Declare `InboxDocument`, `VaultStore`, and `SortJournal` interfaces per [contracts/sort-api.md](contracts/sort-api.md) in `packages/core/src/ports/index.ts`, including `removeRange`'s obligation not to discard concurrent appends (FR-020e)
+- [X] T005 [P] Write failing test that `VaultWriteError` carries `recoverableText`, following `InboxWriteError`'s precedent, in `packages/core/tests/errors.test.ts`
+- [X] T006 Add `VaultWriteError` to `packages/core/src/errors.ts`
+- [X] T007 Build in-memory `FakeInboxDocument`, `FakeVaultStore`, and `FakeSortJournal` — each able to simulate mismatch, I/O failure, and a concurrent append — in `packages/core/tests/sort-fakes.ts` (depends on T004)
+- [X] T008 [P] Write failing classification tests — captured item, hand-written line, two-space continuation, blank line, malformed date treated as hand-written, indented line with no item above it — in `packages/core/tests/inbox-parse.test.ts` (FR-027, FR-027b)
+- [X] T009 Implement line classification producing `ParsedItem[]` in `packages/core/src/inbox/parse.ts` (FR-001, FR-027, FR-027b)
+- [X] T010 [P] Write failing byte-offset tests — multi-byte UTF-8 (emoji, accents, CJK) must not shift offsets, missing trailing newline at EOF, `raw` matches the exact slice — in `packages/core/tests/inbox-parse-offsets.test.ts` (FR-020a, FR-023)
+- [X] T011 Implement byte-offset computation (`start`, `end`, `raw`) in `packages/core/src/inbox/parse.ts` (FR-020a, FR-023)
+- [X] T012 [P] Write failing round-trip property test asserting `parse(serializeItem(x))` yields one item equal to `x`, over generated text including newlines, markdown syntax, and strings that look like timestamps, in `packages/core/tests/inbox-parse-roundtrip.test.ts` (FR-021, FR-022)
+- [X] T013 Reconcile `packages/core/src/inbox/parse.ts` with `packages/core/src/inbox/serialize.ts` until the round-trip test passes (FR-021, FR-022)
+- [X] T014 [P] Declare `ItemRef`, `SortDecision`, `SortOutcome`, and `SortRefusal` types per [contracts/sort-api.md](contracts/sort-api.md) in `packages/core/src/sort/decision.ts` (FR-005, FR-030)
 
 **Checkpoint**: The inbox can be read back into items with verifiable byte ranges. User story work can begin.
 

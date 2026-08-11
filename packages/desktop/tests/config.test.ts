@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { defaultConfig, loadConfig, configFilePath } from "../src/main/config";
+import { defaultConfig, loadConfig, configFilePath, vaultPaths } from "../src/main/config";
+import type { ConfigEnv } from "../src/main/config";
 
 let dir: string;
 
@@ -137,5 +138,64 @@ describe("loadConfig", () => {
     const result = loadConfig(p, env);
     assert.deepEqual(result.config, defaultConfig(env));
     assert.ok(result.problem);
+  });
+});
+
+describe("vaultRoot", () => {
+  const env: ConfigEnv = { home: "/home/alice", platform: "linux" };
+
+  test("defaults to the directory holding the inbox", () => {
+    const cfg = defaultConfig(env);
+    assert.equal(cfg.vaultRoot, "/home/alice/waypoint");
+  });
+
+  test("follows a relocated inbox rather than defaulting independently", () => {
+    // The whole vault moves with the inbox. Two independent defaults would
+    // scatter projects and waiting-for into a directory the user never chose
+    // (research R8a).
+    const p = join(dir, "config.json");
+    writeFileSync(p, JSON.stringify({ inboxPath: "/home/alice/notes/inbox.md" }));
+
+    const result = loadConfig(p, env);
+    assert.equal(result.config.vaultRoot, "/home/alice/notes");
+  });
+
+  test("an explicit vaultRoot overrides the derivation", () => {
+    const p = join(dir, "config.json");
+    writeFileSync(
+      p,
+      JSON.stringify({ inboxPath: "/home/alice/notes/inbox.md", vaultRoot: "/srv/vault" }),
+    );
+
+    const result = loadConfig(p, env);
+    assert.equal(result.config.vaultRoot, "/srv/vault");
+    assert.equal(result.config.inboxPath, "/home/alice/notes/inbox.md");
+  });
+
+  test("an invalid vaultRoot falls back to the derivation without blocking startup", () => {
+    const p = join(dir, "config.json");
+    writeFileSync(p, JSON.stringify({ inboxPath: "/home/alice/notes/inbox.md", vaultRoot: 7 }));
+
+    const result = loadConfig(p, env);
+    assert.equal(result.config.vaultRoot, "/home/alice/notes");
+    assert.match(result.problem ?? "", /vaultRoot/);
+  });
+});
+
+describe("vaultPaths", () => {
+  test("derives every destination from the vault root", () => {
+    const paths = vaultPaths({ ...defaultConfig({ home: "/home/alice", platform: "linux" }) });
+    assert.equal(paths.projectsDir, "/home/alice/waypoint/projects");
+    assert.equal(paths.areasDir, "/home/alice/waypoint/areas");
+    assert.equal(paths.waitingPath, "/home/alice/waypoint/waiting.md");
+    assert.equal(paths.calendarPath, "/home/alice/waypoint/calendar.md");
+    assert.equal(paths.trashPath, "/home/alice/waypoint/trash.md");
+  });
+
+  test("a relocated vault moves every destination with it", () => {
+    const cfg = { ...defaultConfig({ home: "/home/alice", platform: "linux" }), vaultRoot: "/srv/v" };
+    const paths = vaultPaths(cfg);
+    assert.equal(paths.projectsDir, "/srv/v/projects");
+    assert.equal(paths.trashPath, "/srv/v/trash.md");
   });
 });
