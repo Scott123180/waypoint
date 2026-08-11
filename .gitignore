@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 build/
+# ...but packages/desktop/build/ holds the app and tray icons, which are source
+# assets rather than output. The blanket rule above was excluding them from the
+# repo entirely, so a fresh checkout — every CI run — packaged with no icons.
+!packages/desktop/build/
 *.tsbuildinfo
 
 # Bundled whisper.cpp binary and the ~500MB model — fetched by scripts/fetch-whisper.sh,
