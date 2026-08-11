@@ -21,12 +21,25 @@ npm install     # no new dependencies were added by this feature
 
 No microphone, no model, no network. Sort has no external anything.
 
-**Use a scratch vault.** Every scenario below writes real files:
+**Use a scratch vault.** Every scenario below writes real files, and you do not want them landing in your
+real one.
+
+There is no `WAYPOINT_VAULT` environment variable — `vaultRoot` is derived from `inboxPath` (research R8a),
+and the only env hook is `WAYPOINT_CONFIG_PATH`, the same one the E2E harness uses. Point the app at a
+throwaway config:
 
 ```bash
-export WAYPOINT_VAULT=/tmp/waypoint-sort-check
-rm -rf "$WAYPOINT_VAULT" && mkdir -p "$WAYPOINT_VAULT"
+export VAULT=/tmp/waypoint-sort-check
+rm -rf "$VAULT" && mkdir -p "$VAULT"
+
+export WAYPOINT_CONFIG_PATH="$VAULT/config.json"
+cat > "$WAYPOINT_CONFIG_PATH" <<JSON
+{ "inboxPath": "$VAULT/inbox.md" }
+JSON
 ```
+
+Everything else — `projects/`, `areas/`, `waiting.md`, `calendar.md`, `trash.md` — is derived from that
+inbox's directory, so this one setting relocates the whole vault.
 
 ---
 
@@ -51,7 +64,7 @@ Deliberately mixed: captured items, a hand-written line, a multi-line item, a bl
 text. This is the file the scenarios below assume.
 
 ```bash
-cat > "$WAYPOINT_VAULT/inbox.md" <<'EOF'
+cat > "$VAULT/inbox.md" <<'EOF'
 - 2026-08-09T14:23:05-04:00 Call the roofer back about the estimate
 Buy milk
 - 2026-08-09T14:31:12-04:00 Ask Priya whether the migration window moved,
@@ -84,7 +97,7 @@ Open the sort view.
 Route the first item to **waiting-for**, owner `roofer`. Route the next (`Buy milk`) to **calendar**.
 
 ```bash
-cat "$WAYPOINT_VAULT/waiting.md" "$WAYPOINT_VAULT/calendar.md"
+cat "$VAULT/waiting.md" "$VAULT/calendar.md"
 ```
 
 - **Expect** in `waiting.md`: today's date, `@roofer`, the original capture timestamp, the text.
@@ -98,8 +111,8 @@ cat "$WAYPOINT_VAULT/waiting.md" "$WAYPOINT_VAULT/calendar.md"
 Route the Priya item to **trash**.
 
 ```bash
-cat "$WAYPOINT_VAULT/trash.md"
-grep -c "on-call rotation" "$WAYPOINT_VAULT/inbox.md"   # expect 0
+cat "$VAULT/trash.md"
+grep -c "on-call rotation" "$VAULT/inbox.md"   # expect 0
 ```
 
 - **Expect**: both lines of the item in `trash.md`, the continuation still indented.
@@ -111,7 +124,7 @@ grep -c "on-call rotation" "$WAYPOINT_VAULT/inbox.md"   # expect 0
 While the sort view is open on an item, in another terminal:
 
 ```bash
-echo "- 2026-08-11T10:00:00-04:00 Snuck this in by hand" >> "$WAYPOINT_VAULT/inbox.md"
+echo "- 2026-08-11T10:00:00-04:00 Snuck this in by hand" >> "$VAULT/inbox.md"
 ```
 
 Decide the current item, then look at the next.
@@ -123,7 +136,7 @@ Decide the current item, then look at the next.
 Route the offsite item to a **project** that does not exist, titling it `March offsite`.
 
 ```bash
-cat "$WAYPOINT_VAULT/projects/march-offsite.md"
+cat "$VAULT/projects/march-offsite.md"
 ```
 
 - **Expect**: `# March offsite`, `status: active`, `## Unprocessed`, and the item with its timestamp and
@@ -143,7 +156,7 @@ Now try the duplicate and empty cases on the remaining `## Someday` item:
 Sort until nothing is left.
 
 ```bash
-cat "$WAYPOINT_VAULT/inbox.md"     # expect empty, or only blank lines
+cat "$VAULT/inbox.md"     # expect empty, or only blank lines
 ```
 
 - **Expect**: the empty state, with no destination choices offered (FR-026).
@@ -210,8 +223,8 @@ Throughout every scenario above:
 The real acceptance test for Principle IV — close the app entirely and:
 
 ```bash
-ls -R "$WAYPOINT_VAULT"
-grep -r "roofer" "$WAYPOINT_VAULT"
+ls -R "$VAULT"
+grep -r "roofer" "$VAULT"
 ```
 
 Every sorted thought is findable, readable, and editable in a plain text editor, in a directory the user

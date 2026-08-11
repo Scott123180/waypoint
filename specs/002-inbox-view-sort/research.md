@@ -173,6 +173,39 @@ without it is silently unsafe, so the constructor takes it as a required argumen
 
 ---
 
+## R4b — Sort's effect on an open capture undo window
+
+**Decision**: No change to `performUndo`. Wire `CaptureService.expireUndoWindow()` into the client after a
+successful sort decision, purely so the user sees no undo affordance rather than a refusal.
+
+**Rationale**: The obvious worry is that sorting invalidates a live `UndoToken`. Capture records
+`offsetBefore` against the file as it was; sort removes an item from the middle; the offset is now stale;
+undo truncates at the wrong place and corrupts the inbox.
+
+**This was investigated and does not happen.** `performUndo` computes `writtenLength = size -
+offsetBefore` and reads *that many* trailing bytes, rather than reading `serializedBlock.length` bytes.
+The comparison is therefore self-validating: the tail can only equal the block when
+`size - offsetBefore` is exactly the block's length (or one more, for the prepended-newline case). If sort
+removed an earlier item of length `L`, matching would require `L == 0`, which no item satisfies. Every
+case — removed item shorter than, longer than, or equal to the undone item — falls through to
+`file-changed` and refuses. Verified empirically against all three before writing this.
+
+**This is a load-bearing invariant, not a coincidence.** Anyone "optimizing" `readTail(writtenLength)` into
+`readTail(serializedBlock.length)` would make the tail match again while the offset stayed stale, and undo
+would truncate into the middle of a live item. If that line is ever touched, the three-case check belongs
+in the test suite first.
+
+What remains is only a UX wrinkle: after a sort, an undo the user was offered will refuse. Correct, but
+confusing. Expiring the window turns it into an affordance that is simply absent.
+
+**Alternatives considered**:
+- *Add a size assertion to `performUndo`* — my first instinct, and it would be dead code. The existing
+  arithmetic already excludes every case it would catch.
+- *Have sort update the live token's offset* — couples sort to capture's internals to preserve an undo the
+  user is unlikely to want after they have moved on to sorting.
+
+---
+
 ## R5 — Parsing `inbox.md` back into items
 
 **Decision**: A line-oriented parser producing `{ text, capturedAt | null, start, end }` per item.
