@@ -43,6 +43,13 @@
   durable file layout is product surface the user reads and edits, and SC-003/SC-003a are only testable against
   it. Concrete file paths (`calendar.md`, `waiting.md`, `projects/<slug>.md`) stay in Assumptions, not
   requirements.
+- **Cross-artifact analysis 2026-08-11**: 10 findings, all remediated. One CRITICAL — a capture landing
+  during a sort decision was destroyed by the inbox rewrite's `rename`, since capture appends through the
+  orphaned inode. Fixed by a shared in-process write mutex (research R4a), new FR-020e/SC-005a, and
+  regression tasks T031–T036 + T051. Also added FR-020d (journal reconciliation, which the spec had not
+  recorded after planning) and reconciled `vaultRoot` with Feature 1's `inboxPath`. Spec/task traceability
+  is now 100% both ways: every FR and SC is cited by at least one task, and no task cites an identifier
+  that does not exist.
 - Three decisions here create obligations for later features, worth carrying into planning: the discard list
   grows unbounded with no purge (FR-016a), `calendar.md` is a new durable artifact absent from the roadmap's
   data model, and Feature 3 is expected to drain `## Unprocessed` as it adds project structure.
