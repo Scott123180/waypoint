@@ -137,7 +137,14 @@ if [[ -f "${MODEL_PATH}" ]]; then
   echo "==> ${MODEL_NAME} already present, skipping download"
 else
   echo "==> Downloading ${MODEL_NAME} (~500MB)"
-  curl -fL --progress-bar -o "${MODEL_PATH}.part" "${MODEL_URL}"
+  # Retry with backoff: the release workflow builds both platforms at once, so
+  # two runners request this ~500MB file from the same host simultaneously and
+  # Hugging Face answers one of them with 429. curl treats 429 as transient and
+  # honours Retry-After, so this is the failure's own remedy rather than a
+  # blanket retry. --retry-all-errors additionally covers a mid-transfer reset.
+  curl -fL --progress-bar \
+    --retry 5 --retry-delay 5 --retry-max-time 600 --retry-all-errors \
+    -o "${MODEL_PATH}.part" "${MODEL_URL}"
   mv "${MODEL_PATH}.part" "${MODEL_PATH}"
 fi
 
