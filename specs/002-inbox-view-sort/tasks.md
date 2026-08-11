@@ -82,25 +82,25 @@ unsorted byte is unchanged — with no destination creation involved.
 
 ### Tests for User Story 1 ⚠️ WRITE FIRST, CONFIRM THEY FAIL
 
-- [ ] T015 [P] [US1] Failing tests: `next()` returns the first item in file order, returns `null` for an inbox of only blank lines, and returns the *same* item when called repeatedly without a decision, in `packages/core/tests/sort-service.next.test.ts` (FR-001, FR-002, FR-004, FR-027b)
-- [ ] T016 [P] [US1] Failing tests: `count()` and `isEmpty()` are computed from the file and reflect an external hand-edit with no restart, in `packages/core/tests/sort-service.count.test.ts` (FR-025, FR-028)
-- [ ] T017 [P] [US1] Failing tests: `destinations()` lists projects and areas, reads each title from its `#` heading, and falls back to the slug when absent, in `packages/core/tests/sort-service.destinations.test.ts` (FR-006, FR-007)
-- [ ] T018 [P] [US1] Failing tests: `waiting.md`, `calendar.md`, and `trash.md` line grammars per [contracts/vault-format.md](contracts/vault-format.md), including a hand-written item producing a line with no capture timestamp, in `packages/core/tests/vault-lists.test.ts` (FR-013, FR-015, FR-016, FR-017, FR-018, FR-018a, FR-022, FR-027a, SC-010, SC-011)
-- [ ] T019 [P] [US1] Failing tests: insertion under `## Unprocessed` — heading created when absent, section boundary respected, `###` not mistaken for `##`, every other byte preserved in a file already holding Feature 3-shaped structure — in `packages/core/tests/vault-unprocessed.test.ts` (FR-019a, FR-019b, FR-021, SC-003a)
-- [ ] T020 [P] [US1] Failing tests: refusals return values not exceptions and write nothing anywhere — `item-changed` on byte mismatch, `destination-missing` for a deleted project, `empty-owner` for blank waiting-for owner — in `packages/core/tests/sort-service.refusals.test.ts` (FR-014, FR-020a, FR-020b, FR-020c, SC-004a)
-- [ ] T021 [P] [US1] Failing tests: the commit sequence writes journal → destination → inbox removal → clear, in that order, and replay is idempotent at each of the four crash points, in `packages/core/tests/sort-journal.test.ts` (FR-019, FR-020, FR-020d, SC-005)
-- [ ] T022 [P] [US1] Failing test: a multi-line item moves as one unit, continuation lines intact, and surrounding blank lines survive in the inbox, in `packages/core/tests/sort-multiline.test.ts` (FR-003, FR-021, FR-023)
+- [X] T015 [P] [US1] Failing tests: `next()` returns the first item in file order, returns `null` for an inbox of only blank lines, and returns the *same* item when called repeatedly without a decision, in `packages/core/tests/sort-service.next.test.ts` (FR-001, FR-002, FR-004, FR-027b)
+- [X] T016 [P] [US1] Failing tests: `count()` and `isEmpty()` are computed from the file and reflect an external hand-edit with no restart, in `packages/core/tests/sort-service.count.test.ts` (FR-025, FR-028)
+- [X] T017 [P] [US1] Failing tests: `destinations()` lists projects and areas, reads each title from its `#` heading, and falls back to the slug when absent, in `packages/core/tests/sort-service.destinations.test.ts` (FR-006, FR-007)
+- [X] T018 [P] [US1] Failing tests: `waiting.md`, `calendar.md`, and `trash.md` line grammars per [contracts/vault-format.md](contracts/vault-format.md), including a hand-written item producing a line with no capture timestamp, in `packages/core/tests/vault-lists.test.ts` (FR-013, FR-015, FR-016, FR-017, FR-018, FR-018a, FR-022, FR-027a, SC-010, SC-011)
+- [X] T019 [P] [US1] Failing tests: insertion under `## Unprocessed` — heading created when absent, section boundary respected, `###` not mistaken for `##`, every other byte preserved in a file already holding Feature 3-shaped structure — in `packages/core/tests/vault-unprocessed.test.ts` (FR-019a, FR-019b, FR-021, SC-003a)
+- [X] T020 [P] [US1] Failing tests: refusals return values not exceptions and write nothing anywhere — `item-changed` on byte mismatch, `destination-missing` for a deleted project, `empty-owner` for blank waiting-for owner — in `packages/core/tests/sort-service.refusals.test.ts` (FR-014, FR-020a, FR-020b, FR-020c, SC-004a)
+- [X] T021 [P] [US1] Failing tests: the commit sequence writes journal → destination → inbox removal → clear, in that order, and replay is idempotent at each of the four crash points, in `packages/core/tests/sort-journal.test.ts` (FR-019, FR-020, FR-020d, SC-005)
+- [X] T022 [P] [US1] Failing test: a multi-line item moves as one unit, continuation lines intact, and surrounding blank lines survive in the inbox, in `packages/core/tests/sort-multiline.test.ts` (FR-003, FR-021, FR-023)
 
 ### Implementation for User Story 1
 
-- [ ] T023 [P] [US1] Implement `## Unprocessed` section insertion as a pure string function in `packages/core/src/vault/unprocessed.ts` (FR-019a, FR-019b)
-- [ ] T024 [P] [US1] Implement `waiting.md` / `calendar.md` / `trash.md` line formatting in `packages/core/src/vault/lists.ts` (FR-013, FR-016, FR-017, FR-017a, FR-022)
-- [ ] T025 [US1] Implement journal entry shape and replay decision logic in `packages/core/src/sort/journal.ts` (FR-020, FR-020d)
-- [ ] T026 [US1] Implement the four-step commit sequence in `packages/core/src/sort/commit.ts` (FR-019, FR-020, FR-020d) (depends on T023, T024, T025)
-- [ ] T027 [US1] Implement `SortService.next()`, `count()`, and `isEmpty()` in `packages/core/src/sort/sort-service.ts` (FR-001, FR-002, FR-004, FR-028)
-- [ ] T028 [US1] Implement `SortService.destinations()` in `packages/core/src/sort/sort-service.ts` (FR-006, FR-007)
-- [ ] T029 [US1] Implement `SortService.sort()` for existing destinations, including all refusal paths, in `packages/core/src/sort/sort-service.ts` (FR-005, FR-013, FR-014, FR-016, FR-017, FR-019, FR-020a, FR-020b, FR-020c) (depends on T026)
-- [ ] T030 [US1] Export the sort surface — `SortService`, types, `VaultWriteError`, new ports — from `packages/core/src/index.ts`
+- [X] T023 [P] [US1] Implement `## Unprocessed` section insertion as a pure string function in `packages/core/src/vault/unprocessed.ts` (FR-019a, FR-019b)
+- [X] T024 [P] [US1] Implement `waiting.md` / `calendar.md` / `trash.md` line formatting in `packages/core/src/vault/lists.ts` (FR-013, FR-016, FR-017, FR-017a, FR-022)
+- [X] T025 [US1] Implement journal entry shape and replay decision logic in `packages/core/src/sort/journal.ts` (FR-020, FR-020d)
+- [X] T026 [US1] Implement the four-step commit sequence in `packages/core/src/sort/commit.ts` (FR-019, FR-020, FR-020d) (depends on T023, T024, T025)
+- [X] T027 [US1] Implement `SortService.next()`, `count()`, and `isEmpty()` in `packages/core/src/sort/sort-service.ts` (FR-001, FR-002, FR-004, FR-028)
+- [X] T028 [US1] Implement `SortService.destinations()` in `packages/core/src/sort/sort-service.ts` (FR-006, FR-007)
+- [X] T029 [US1] Implement `SortService.sort()` for existing destinations, including all refusal paths, in `packages/core/src/sort/sort-service.ts` (FR-005, FR-013, FR-014, FR-016, FR-017, FR-019, FR-020a, FR-020b, FR-020c) (depends on T026)
+- [X] T030 [US1] Export the sort surface — `SortService`, types, `VaultWriteError`, new ports — from `packages/core/src/index.ts`
 
 ### Filesystem adapters for User Story 1
 

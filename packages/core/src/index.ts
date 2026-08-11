@@ -11,3 +11,21 @@ export { EmptyCaptureError, TranscriptionFailedError, InboxWriteError } from "./
 export type { CaptureItem, CaptureSource } from "./capture/capture-item";
 export { CaptureService } from "./capture/capture-service";
 export type { SubmitResult, CaptureServiceDeps } from "./capture/capture-service";
+
+export type { InboxDocument, VaultStore, SortJournal, JournalEntry } from "./ports/index";
+export { VaultWriteError } from "./errors";
+
+export { parseInbox, isInboxEmpty } from "./inbox/parse";
+export type { ParsedItem } from "./inbox/parse";
+
+export { SortService } from "./sort/sort-service";
+export type { SortServiceDeps } from "./sort/sort-service";
+export type {
+  ItemRef,
+  SortDecision,
+  SortOutcome,
+  SortRefusal,
+  InboxItemView,
+  DestinationRef,
+  RecoveryReport,
+} from "./sort/decision";
