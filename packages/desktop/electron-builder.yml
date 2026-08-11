@@ -2,11 +2,6 @@ appId: dev.waypoint.app
 productName: Waypoint
 copyright: Waypoint
 
-# Without this the executable is named after the package (`@waypoint/desktop`),
-# producing a binary called `@waypointdesktop` — a leading `@` that the AppImage
-# launcher cannot exec.
-executableName: waypoint
-
 # No native modules anywhere in the tree, so there is nothing to rebuild. The
 # step is disabled because it runs `npm install --production` inside the app
 # directory, which in an npm workspace prunes the hoisted devDependencies — up
@@ -62,6 +57,12 @@ mac:
   identity: null
 
 linux:
+  # Scoped to Linux deliberately. Without it the executable is named after the
+  # package (`@waypoint/desktop`), giving `@waypointdesktop` — a leading `@` the
+  # AppImage launcher cannot exec. Setting it globally also renamed the macOS
+  # bundle to `waypoint.app`, so Finder showed a lowercase name next to
+  # "Waypoint Helper.app"; macOS takes its name from productName instead.
+  executableName: waypoint
   target:
     - target: AppImage
       arch: [x64]
