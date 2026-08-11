@@ -23,8 +23,11 @@ files:
   - package.json
   - "!dist/tests/**"
   - "!**/*.map"
-  # The workspace symlink pulls in core's compiled tests too.
-  - "!node_modules/@waypoint/core/dist/tests/**"
+  # Note: core's compiled tests still ship. electron-builder copies symlinked
+  # workspace dependencies wholesale, and honours neither a `files` negation
+  # here nor a `files` field in core's own package.json — all three were tried
+  # against a real build. ~30KB inside a 555MB artifact, so it is left alone
+  # rather than restructuring core's build output to work around it.
 
 extraMetadata:
   main: dist/src/main/main.js
