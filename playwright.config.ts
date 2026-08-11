@@ -8,7 +8,14 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   timeout: 30_000,
-  reporter: process.env["CI"] ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  // The `github` reporter emits each failure as a workflow annotation, and
+  // annotations are readable from the public API without a token — unlike raw
+  // logs (403) and artifacts (401). Without it a CI failure reports only
+  // "Process completed with exit code 1", which says nothing about which test
+  // broke or why.
+  reporter: process.env["CI"]
+    ? [["github"], ["list"], ["html", { open: "never" }]]
+    : [["list"]],
   use: {
     trace: "retain-on-failure",
   },
