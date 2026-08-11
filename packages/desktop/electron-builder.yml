@@ -45,6 +45,11 @@ mac:
   target:
     - target: dmg
       arch: [arm64]
+    # Some networks block .dmg downloads by file extension. The zip carries the
+    # same Waypoint.app, and has the side benefit of needing no disk image
+    # mounted — unzip and drag.
+    - target: zip
+      arch: [arm64]
   category: public.app-category.productivity
   # Background agent: no dock icon, summoned by hotkey or the menu-bar item.
   extendInfo:

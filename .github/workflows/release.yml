@@ -63,6 +63,7 @@ jobs:
           name: waypoint-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             release/*.dmg
+            release/*.zip
             release/*.AppImage
           retention-days: 14
 
@@ -79,6 +80,14 @@ jobs:
         with:
           files: artifacts/**/*
           body: |
+            **macOS (Apple Silicon)**: `.dmg`, or the `.zip` if your network
+            blocks `.dmg` downloads by extension — same app, no disk image to
+            mount. **Linux (x64)**: `.AppImage`.
+
             Unsigned builds — macOS requires a Gatekeeper bypass on first launch
             (right-click → Open). Signing and notarization are deferred.
+
+            The app runs in the background with no dock icon. Press
+            `Cmd/Ctrl+Shift+Space` to capture by voice, `Cmd/Ctrl+Shift+Enter`
+            to type, or use the menu-bar icon.
           generate_release_notes: true
