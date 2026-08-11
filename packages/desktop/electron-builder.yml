@@ -8,6 +8,10 @@ copyright: Waypoint
 # to and including electron-builder's own app-builder binary, mid-build.
 npmRebuild: false
 
+# Resolved relative to the working directory, *not* to --projectDir or to this
+# file — hence the repo-root path. `npm run package` always runs from the root.
+afterPack: scripts/after-pack.js
+
 directories:
   output: ../../release
   buildResources: build
@@ -52,8 +56,10 @@ mac:
     NSMicrophoneUsageDescription: >-
       Waypoint transcribes your dictated thoughts on this device. Audio is never
       recorded to disk and never leaves your Mac.
-  # Signing and notarization are deliberately deferred; first launch needs a
-  # Gatekeeper bypass (right-click → Open).
+  # Developer ID signing and notarization are deliberately deferred. The bundle
+  # is still ad-hoc signed by after-pack.js, because Apple Silicon will not run
+  # an unsigned arm64 binary at all — without it macOS reports the app as
+  # "damaged", which right-click → Open cannot get past.
   identity: null
 
 linux:
