@@ -71,6 +71,30 @@ test("an empty title creates nothing and keeps the item", async () => {
   expect(h.inbox()).toContain("Book flights for the offsite");
 });
 
+test("the create row is set apart from the existing destinations", async () => {
+  h = await launch();
+  h.writeInbox(SEED);
+  h.writeVaultFile("projects/march-offsite.md", "# March offsite\n\nstatus: active\n");
+  await h.openSort();
+  const view = await h.sortView();
+
+  await view.locator("#to-project").click();
+  await expect(view.locator('#panel button[data-slug="march-offsite"]')).toBeVisible();
+
+  const gap = await view.locator("#create-submit").evaluate((el) => {
+    const style = getComputedStyle(el.closest("div") as HTMLElement);
+    return {
+      above: parseFloat(style.marginTop) + parseFloat(style.paddingTop),
+      rule: parseFloat(style.borderTopWidth),
+    };
+  });
+
+  // Flush against the list, "New project title" reads as one more existing
+  // project rather than a different kind of action.
+  expect(gap.above).toBeGreaterThanOrEqual(12);
+  expect(gap.rule).toBeGreaterThan(0);
+});
+
 test("areas work the same way", async () => {
   const view = await open();
 

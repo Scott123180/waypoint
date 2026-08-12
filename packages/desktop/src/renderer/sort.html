@@ -5,127 +5,278 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
     <title>Sort inbox</title>
     <style>
+      /*
+        Deliberately the same vocabulary as the capture box: the five tokens
+        below are its palette verbatim. No cards, no accent hue, no shadows —
+        the two windows are one tool (Principle VII), and a second visual
+        language would say otherwise. Anything here that capture also has is
+        spelled the same way on purpose.
+      */
       :root {
         color-scheme: light dark;
-        --fg: #1c1c1e;
-        --muted: #6b6b70;
-        --bg: #f7f7f8;
-        --card: #ffffff;
-        --line: #dcdce0;
-        --accent: #2f5fd0;
-        --danger: #a33;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --border: #d8d8d8;
+        --error: #a4262c;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --fg: #ececee;
-          --muted: #9a9aa0;
-          --bg: #1b1b1d;
-          --card: #262629;
-          --line: #3a3a3e;
-          --accent: #7fa3f0;
-          --danger: #e08585;
+          --bg: #1e1e1e;
+          --fg: #f2f2f2;
+          --muted: #9a9a9a;
+          --border: #3a3a3a;
+          --error: #ff9a9a;
         }
       }
       * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
       body {
-        margin: 0;
-        padding: 20px;
-        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-        color: var(--fg);
         background: var(--bg);
-      }
-      header {
+        color: var(--fg);
+        font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
         display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 14px;
+        flex-direction: column;
+        overflow: hidden;
       }
-      h1 { font-size: 15px; font-weight: 600; margin: 0; }
-      #remaining { color: var(--muted); font-size: 13px; }
 
-      #item {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 16px;
+      /* --------------------------------------------------------- progress -- */
+      /*
+        Two pixels, no label. Sorting is a grind whose only real reward is
+        watching it end, and a bar you can see fill is worth more than a number
+        you have to read.
+      */
+      #progress { flex: none; height: 2px; }
+      #progress i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: var(--fg);
+        opacity: 0.5;
+        transition: width 240ms ease-out;
       }
-      #captured-at { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+
+      #sorting { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+      /* ------------------------------------------------------------ item -- */
+      /*
+        The thought is the only thing on screen worth reading, so it gets the
+        space, the size, and the vertical centre. Everything else is trim.
+      */
+      #stage {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 30px 34px;
+      }
+      #captured-at {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
       #captured-at:empty { display: none; }
-      #text { white-space: pre-wrap; word-break: break-word; margin: 0; }
+      #text {
+        margin: 0;
+        font-size: 21px;
+        line-height: 1.5;
+        max-width: 62ch;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      /* Re-triggered per item: without it, fast keyboard sorting gives no sign
+         anything advanced, and two similar thoughts in a row read as a freeze. */
+      #stage.enter { animation: rise 190ms ease-out; }
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: none; }
+      }
 
-      #choices { display: flex; flex-wrap: wrap; gap: 8px; }
-      button {
+      /* ----------------------------------------------------------- panel -- */
+      #panel { flex: none; max-height: 46%; overflow-y: auto; padding: 0 34px 4px; }
+      #panel:empty { display: none; }
+
+      input[type="text"] {
         font: inherit;
-        padding: 8px 14px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--card);
+        width: 100%;
+        max-width: 420px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        outline: 0;
+      }
+      input[type="text"]:focus { border-color: var(--fg); }
+      input[type="text"]::placeholder { color: var(--muted); }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        max-height: 168px;
+        overflow-y: auto;
+        margin-top: 10px;
+      }
+      /* Flat rows, not buttons: a wall of outlined pills would out-shout the
+         thought being filed. The border arrives on hover, where it means
+         "this is the one". */
+      .list button {
+        font: inherit;
+        text-align: left;
+        width: 100%;
+        padding: 7px 12px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
         color: var(--fg);
         cursor: pointer;
       }
-      button:hover:not(:disabled) { border-color: var(--accent); }
-      button:disabled { opacity: 0.5; cursor: default; }
+      .list button:hover,
+      .list button:focus-visible { outline: 0; border-color: var(--fg); }
 
-      #panel { margin-top: 14px; }
-      #panel:empty { display: none; }
-      input[type="text"] {
+      .none { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .row button {
         font: inherit;
-        padding: 8px 10px;
-        width: 100%;
-        max-width: 380px;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--card);
-        color: var(--fg);
+        font-size: 13px;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
       }
-      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-      .list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; }
-      .list button { text-align: left; }
-
-      #empty { text-align: center; padding: 48px 16px; color: var(--muted); }
-      #notice {
+      .row button:hover,
+      .row button:focus-visible { outline: 0; color: var(--fg); border-color: var(--fg); }
+      /*
+        Filing into something that exists and bringing something new into being
+        are different acts, so the create control is set apart rather than
+        stacked flush against the list. The rule only appears when there is a
+        list to divide from — with no projects yet it would underline nothing.
+      */
+      .row.create { margin-top: 12px; }
+      .list:not(:empty) + .row.create {
         margin-top: 14px;
-        padding: 10px 12px;
-        border-radius: 6px;
-        border: 1px solid var(--line);
-        background: var(--card);
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+
+      /* -------------------------------------------------------- controls -- */
+      #controls {
+        flex: none;
+        padding: 14px 34px 16px;
+        border-top: 1px solid var(--border);
+      }
+      #choices { display: flex; flex-wrap: wrap; gap: 8px; }
+      /* Capture's pill, unchanged. */
+      #choices button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      #choices button:hover:not(:disabled),
+      #choices button:focus-visible { outline: 0; color: var(--fg); border-color: var(--fg); }
+      /* The one irreversible-feeling choice announces itself before the click,
+         not after. (It is a soft delete, so this is a caution, not a warning.) */
+      #to-trash:hover:not(:disabled),
+      #to-trash:focus-visible { color: var(--error); border-color: var(--error); }
+      #choices button:disabled { opacity: 0.55; cursor: default; }
+      #choices kbd {
+        font: inherit;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        opacity: 0.6;
+      }
+
+      #meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #remaining { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+      /* ----------------------------------------------------------- empty -- */
+      #empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        color: var(--muted);
         font-size: 13px;
       }
+      #empty strong { display: block; color: var(--fg); font-size: 17px; font-weight: 600; }
+
+      /* ---------------------------------------------------------- notice -- */
+      #notice {
+        flex: none;
+        padding: 9px 34px;
+        font-size: 12.5px;
+        color: var(--muted);
+        border-top: 1px solid var(--border);
+      }
       #notice:empty { display: none; }
-      #notice.error { color: var(--danger); border-color: var(--danger); }
+      #notice.error { color: var(--error); }
+
+      @media (prefers-reduced-motion: reduce) {
+        #stage.enter { animation: none; }
+        #progress i { transition: none; }
+      }
       [hidden] { display: none !important; }
     </style>
   </head>
   <body>
-    <header>
-      <h1>Sort inbox</h1>
-      <span id="remaining"></span>
-    </header>
+    <div id="progress" aria-hidden="true"><i></i></div>
 
     <main id="sorting" hidden>
-      <section id="item">
+      <section id="stage">
         <div id="captured-at"></div>
         <p id="text"></p>
       </section>
 
-      <div id="choices">
-        <button id="to-project" type="button">Project</button>
-        <button id="to-area" type="button">Area</button>
-        <button id="to-waiting" type="button">Waiting for</button>
-        <button id="to-calendar" type="button">Calendar</button>
-        <button id="to-trash" type="button">Trash</button>
-      </div>
-
       <div id="panel"></div>
+
+      <div id="controls">
+        <div id="choices">
+          <button id="to-project" type="button">Project <kbd>P</kbd></button>
+          <button id="to-area" type="button">Area <kbd>A</kbd></button>
+          <button id="to-waiting" type="button">Waiting for <kbd>W</kbd></button>
+          <button id="to-calendar" type="button">Calendar <kbd>C</kbd></button>
+          <button id="to-trash" type="button">Trash <kbd>T</kbd></button>
+        </div>
+        <div id="meta">
+          <span id="hint">Press a letter to file &middot; Esc to close</span>
+          <span id="remaining"></span>
+        </div>
+      </div>
     </main>
 
     <section id="empty" hidden>
-      <p><strong>Inbox zero.</strong></p>
-      <p>Nothing left to sort.</p>
+      <strong>Inbox zero.</strong>
+      <span>Nothing left to sort.</span>
     </section>
 
-    <div id="notice"></div>
+    <div id="notice" role="status" aria-live="polite"></div>
 
     <script type="module" src="./sort.js"></script>
   </body>
