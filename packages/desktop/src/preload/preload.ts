@@ -59,6 +59,73 @@ const api = {
   },
 };
 
-contextBridge.exposeInMainWorld("waypoint", api);
+/**
+ * Sort channels. Pass-throughs only — the renderer has no way to express what
+ * a destination *is*, only which one the user picked.
+ *
+ * See specs/002-inbox-view-sort/contracts/ipc-sort.md
+ */
+export interface ItemRef {
+  start: number;
+  end: number;
+  raw: string;
+}
 
-export type WaypointApi = typeof api;
+export type SortDecision =
+  | { to: "project"; slug: string }
+  | { to: "project"; createTitle: string }
+  | { to: "area"; slug: string }
+  | { to: "area"; createTitle: string }
+  | { to: "waiting"; owner: string }
+  | { to: "calendar" }
+  | { to: "trash" };
+
+export type SortNextResponse =
+  | { item: { text: string; capturedAt: string | null; ref: ItemRef } }
+  | { item: null };
+
+export type SortDecideResponse =
+  | { ok: true; destination: string }
+  | { ok: false; reason: string; message: string };
+
+const sortApi = {
+  next(): Promise<SortNextResponse> {
+    return ipcRenderer.invoke("sort:next");
+  },
+
+  destinations(): Promise<{
+    projects: { slug: string; title: string }[];
+    areas: { slug: string; title: string }[];
+  }> {
+    return ipcRenderer.invoke("sort:destinations");
+  },
+
+  count(): Promise<number> {
+    return ipcRenderer.invoke("sort:count");
+  },
+
+  decide(ref: ItemRef, decision: SortDecision): Promise<SortDecideResponse> {
+    return ipcRenderer.invoke("sort:decide", ref, decision);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("sort:dismiss");
+  },
+
+  onRefresh(callback: () => void): void {
+    ipcRenderer.on("sort:refresh", () => callback());
+  },
+
+  onRecovered(callback: (report: { completed: number; abandoned: number }) => void): void {
+    ipcRenderer.on("sort:recovered", (_event, report) => callback(report));
+  },
+
+  onNotice(callback: (notice: Notice) => void): void {
+    ipcRenderer.on("sort:notice", (_event, notice: Notice) => callback(notice));
+  },
+};
+
+contextBridge.exposeInMainWorld("waypoint", { ...api, sort: sortApi });
+
+export type WaypointApi = typeof api & { sort: typeof sortApi };
+export type WaypointSortApi = typeof sortApi;

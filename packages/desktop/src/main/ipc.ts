@@ -24,8 +24,9 @@ export function registerIpc(
   service: CaptureService,
   window: CaptureWindow,
   sort?: SortService,
+  hideSort?: () => void,
 ): void {
-  if (sort) registerSortIpc(sort, service);
+  if (sort) registerSortIpc(sort, service, hideSort);
 
   ipcMain.handle(
     "capture:transcribe",
@@ -74,7 +75,13 @@ export function registerIpc(
  *
  * See specs/002-inbox-view-sort/contracts/ipc-sort.md
  */
-function registerSortIpc(sort: SortService, capture: CaptureService): void {
+function registerSortIpc(
+  sort: SortService,
+  capture: CaptureService,
+  hideSort?: () => void,
+): void {
+  ipcMain.on("sort:dismiss", () => hideSort?.());
+
   ipcMain.handle("sort:next", async () => {
     const item = await sort.next();
     if (!item) return { item: null };

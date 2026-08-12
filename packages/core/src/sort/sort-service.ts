@@ -1,5 +1,7 @@
 import type { Clock, InboxDocument, SortJournal, VaultStore } from "../ports/index";
 import { parseInbox, type ParsedItem } from "../inbox/parse";
+import { slugify, uniqueSlug } from "../vault/slug";
+import { renderStub } from "../vault/stub";
 import { commitDecision, recoverPending, type CommitDeps } from "./commit";
 import type { SortJournalEntry } from "./journal";
 import type {
@@ -110,20 +112,6 @@ export class SortService {
     const invalid = validate(decision);
     if (invalid) return invalid;
 
-    if (decision.to === "project" || decision.to === "area") {
-      if ("slug" in decision) {
-        const dir = decision.to === "project" ? "projects" : "areas";
-        const path = `${dir}/${decision.slug}.md`;
-        if ((await this.deps.vault.read(path)) === null) {
-          return {
-            ok: false,
-            reason: "destination-missing",
-            message: `${path} no longer exists. Nothing was written; choose again.`,
-          };
-        }
-      }
-    }
-
     const item = itemFromRef(ref);
     if (!item) {
       return {
@@ -133,7 +121,73 @@ export class SortService {
       };
     }
 
-    return commitDecision(this.deps, ref, decision, item);
+    // Verified *before* a stub can be created. Creating first would leave an
+    // orphan project behind whenever the item turned out to have changed
+    // (FR-010). commitDecision verifies again at the actual write.
+    const onDisk = await this.deps.inbox.read();
+    if (Buffer.from(onDisk, "utf8").subarray(ref.start, ref.end).toString("utf8") !== ref.raw) {
+      return {
+        ok: false,
+        reason: "item-changed",
+        message:
+          "The item changed on disk since it was shown, so nothing was written. " +
+          "Here it is as it now reads.",
+      };
+    }
+
+    let resolved = decision;
+
+    if (decision.to === "project" || decision.to === "area") {
+      const dir = decision.to === "project" ? "projects" : "areas";
+
+      if ("slug" in decision) {
+        const path = `${dir}/${decision.slug}.md`;
+        if ((await this.deps.vault.read(path)) === null) {
+          return {
+            ok: false,
+            reason: "destination-missing",
+            message: `${path} no longer exists. Nothing was written; choose again.`,
+          };
+        }
+      } else {
+        // Create-on-the-spot. Resolved to a concrete slug here, then committed
+        // as one journaled operation, so there is no window in which a stub
+        // exists but its item never moved (FR-008, FR-010).
+        const created = await this.resolveCreate(dir, decision.createTitle);
+        if ("reason" in created) return created;
+        resolved = { to: decision.to, slug: created.slug } as SortDecision;
+      }
+    }
+
+    return commitDecision(this.deps, ref, resolved, item);
+  }
+
+  /**
+   * Resolves a create-title to a concrete slug, creating the stub if needed.
+   *
+   * A title matching an existing destination routes there instead of creating
+   * a duplicate — that is FR-012, and it is why the comparison is on slugs
+   * rather than exact strings.
+   */
+  private async resolveCreate(
+    dir: "projects" | "areas",
+    title: string,
+  ): Promise<{ slug: string } | Extract<SortOutcome, { ok: false }>> {
+    const base = slugify(title);
+    if (base.length === 0) {
+      return {
+        ok: false,
+        reason: "empty-title",
+        message: "A title is required. Nothing was created.",
+      };
+    }
+
+    const existing = await this.deps.vault.list(dir);
+    if (existing.includes(base)) return { slug: base };
+
+    const slug = uniqueSlug(base, existing);
+    await this.deps.vault.write(`${dir}/${slug}.md`, renderStub(title));
+    return { slug };
   }
 
   /**

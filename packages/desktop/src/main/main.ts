@@ -10,6 +10,7 @@ import { FsSortJournal } from "./adapters/fs-sort-journal";
 import { InboxMutex } from "./inbox-mutex";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
+import { SortWindow } from "./sort-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
 import { registerIpc } from "./ipc";
@@ -78,8 +79,17 @@ function start(): void {
     journal: new FsSortJournal(sortJournalPath(env)),
   });
 
+  const sortWindow = new SortWindow();
+  const showSort = (): void => sortWindow.show();
+
   captureWindow.create();
-  registerIpc(service, captureWindow, sortService);
+  registerIpc(service, captureWindow, sortService, () => sortWindow.hide());
+
+  // Finish anything that was in flight when the process last stopped, before
+  // the user can see a half-committed state (FR-020d, FR-024).
+  void sortService.recover().then((report) => {
+    if (report.completed > 0 || report.abandoned > 0) sortWindow.recovered(report);
+  });
 
   const showCapture = (): void => captureWindow.show("type");
   const showCaptureDictating = (): void => captureWindow.show("dictate");
@@ -116,6 +126,7 @@ function start(): void {
     onCapture: showCapture,
     onDictate: showCaptureDictating,
     onUndo: () => void undoLatest(),
+    onSort: showSort,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -153,6 +164,9 @@ function start(): void {
       hotkeyRegistered: () => hotkeys.capture,
       dictateHotkeyRegistered: () => hotkeys.dictate,
       undoableId: () => service.undoableId(),
+      showSort,
+      hideSort: () => sortWindow.hide(),
+      isSortVisible: () => sortWindow.isVisible(),
       undoLatest,
       setStubTranscript: (text: string) => {
         stubTranscript.value = text;

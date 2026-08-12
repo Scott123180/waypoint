@@ -10,6 +10,8 @@ export interface TrayActions {
   onUndo: () => void;
   /** Whether an undoable capture currently exists. */
   canUndo: () => boolean;
+  /** Opens the sort view. The in-app entry point for Feature 2. */
+  onSort: () => void;
 }
 
 /**
@@ -33,6 +35,7 @@ export function createTray(actions: TrayActions): Tray | undefined {
         { label: "Capture a thought", click: actions.onCapture },
         { label: "Dictate a thought", click: actions.onDictate },
         { label: "Undo last capture", click: actions.onUndo, enabled: actions.canUndo() },
+        { label: "Sort inbox", click: actions.onSort },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },
       ]);

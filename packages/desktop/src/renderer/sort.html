@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Sort inbox</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1c1c1e;
+        --muted: #6b6b70;
+        --bg: #f7f7f8;
+        --card: #ffffff;
+        --line: #dcdce0;
+        --accent: #2f5fd0;
+        --danger: #a33;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #ececee;
+          --muted: #9a9aa0;
+          --bg: #1b1b1d;
+          --card: #262629;
+          --line: #3a3a3e;
+          --accent: #7fa3f0;
+          --danger: #e08585;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 14px;
+      }
+      h1 { font-size: 15px; font-weight: 600; margin: 0; }
+      #remaining { color: var(--muted); font-size: 13px; }
+
+      #item {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      #captured-at { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+      #captured-at:empty { display: none; }
+      #text { white-space: pre-wrap; word-break: break-word; margin: 0; }
+
+      #choices { display: flex; flex-wrap: wrap; gap: 8px; }
+      button {
+        font: inherit;
+        padding: 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--card);
+        color: var(--fg);
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { border-color: var(--accent); }
+      button:disabled { opacity: 0.5; cursor: default; }
+
+      #panel { margin-top: 14px; }
+      #panel:empty { display: none; }
+      input[type="text"] {
+        font: inherit;
+        padding: 8px 10px;
+        width: 100%;
+        max-width: 380px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--card);
+        color: var(--fg);
+      }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+      .list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; }
+      .list button { text-align: left; }
+
+      #empty { text-align: center; padding: 48px 16px; color: var(--muted); }
+      #notice {
+        margin-top: 14px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        font-size: 13px;
+      }
+      #notice:empty { display: none; }
+      #notice.error { color: var(--danger); border-color: var(--danger); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Sort inbox</h1>
+      <span id="remaining"></span>
+    </header>
+
+    <main id="sorting" hidden>
+      <section id="item">
+        <div id="captured-at"></div>
+        <p id="text"></p>
+      </section>
+
+      <div id="choices">
+        <button id="to-project" type="button">Project</button>
+        <button id="to-area" type="button">Area</button>
+        <button id="to-waiting" type="button">Waiting for</button>
+        <button id="to-calendar" type="button">Calendar</button>
+        <button id="to-trash" type="button">Trash</button>
+      </div>
+
+      <div id="panel"></div>
+    </main>
+
+    <section id="empty" hidden>
+      <p><strong>Inbox zero.</strong></p>
+      <p>Nothing left to sort.</p>
+    </section>
+
+    <div id="notice"></div>
+
+    <script type="module" src="./sort.js"></script>
+  </body>
+</html>

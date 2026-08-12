@@ -119,17 +119,17 @@ unsorted byte is unchanged — with no destination creation involved.
 
 - [X] T041 [US1] Add `sort:next`, `sort:destinations`, `sort:decide`, `sort:count`, and `sort:dismiss` handlers as pass-throughs to `SortService` in `packages/desktop/src/main/ipc.ts`, per [contracts/ipc-sort.md](contracts/ipc-sort.md) (FR-005, FR-030)
 - [X] T042 [US1] Expose `window.waypoint.sort` and nothing else in `packages/desktop/src/preload/preload.ts`
-- [ ] T043 [US1] Create the sort window in `packages/desktop/src/main/sort-window.ts`
-- [ ] T044 [P] [US1] Create the sort view markup — one item, five choices — in `packages/desktop/src/renderer/sort.html` (FR-004, FR-005)
-- [ ] T045 [US1] Implement renderer input handling and rendering in `packages/desktop/src/renderer/sort.ts`; it must await `sort:decide` before requesting the next item, show no timestamp for a `null` `capturedAt`, and render destinations in the order given (FR-002, FR-003, FR-019, FR-027a, FR-030)
+- [X] T043 [US1] Create the sort window in `packages/desktop/src/main/sort-window.ts`
+- [X] T044 [P] [US1] Create the sort view markup — one item, five choices — in `packages/desktop/src/renderer/sort.html` (FR-004, FR-005)
+- [X] T045 [US1] Implement renderer input handling and rendering in `packages/desktop/src/renderer/sort.ts`; it must await `sort:decide` before requesting the next item, show no timestamp for a `null` `capturedAt`, and render destinations in the order given (FR-002, FR-003, FR-019, FR-027a, FR-030)
 - [X] T046 [US1] Construct `SortService` with the three adapters **and the shared mutex** in `packages/desktop/src/main/main.ts` (FR-020e)
-- [ ] T047 [US1] Add `showSort`, `hideSort`, and `isSortVisible` to the existing `WAYPOINT_E2E` seam in `packages/desktop/src/main/main.ts`
+- [X] T047 [US1] Add `showSort`, `hideSort`, and `isSortVisible` to the existing `WAYPOINT_E2E` seam in `packages/desktop/src/main/main.ts`
 - [X] T047a [US1] After a successful `sort:decide`, call the existing `CaptureService.expireUndoWindow()` in `packages/desktop/src/main/ipc.ts`. `performUndo` already refuses safely once the inbox has been spliced (research R4b) — this only replaces a confusing refusal with no affordance at all. Do **not** add a size assertion to `performUndo`; the existing tail arithmetic already excludes every case it would catch
-- [ ] T048 [P] [US1] E2E: one item at a time, five destinations, item leaves the inbox and lands in its file; assert no date/time prompt appears on the calendar choice, in `packages/desktop/tests/e2e/sort-basic.spec.ts` (FR-001, FR-004, FR-005, FR-017a, FR-019)
+- [X] T048 [P] [US1] E2E: one item at a time, five destinations, item leaves the inbox and lands in its file; assert no date/time prompt appears on the calendar choice, in `packages/desktop/tests/e2e/sort-basic.spec.ts` (FR-001, FR-004, FR-005, FR-017a, FR-019)
 - [ ] T049 [P] [US1] E2E: a hand-written item is routable and displays no timestamp; a multi-line item moves whole, in `packages/desktop/tests/e2e/sort-handwritten.spec.ts` (FR-003, FR-027, FR-027a)
 - [ ] T050 [P] [US1] E2E: hand-edit the current item's line on disk mid-decision, then decide — expect refusal, re-present, and zero bytes written anywhere, in `packages/desktop/tests/e2e/sort-hand-edit-race.spec.ts` (FR-020a, FR-020b, SC-004a)
 - [ ] T051 [P] [US1] E2E: fire a capture via the existing test seam while a sort decision is committing; assert the captured item is in the inbox afterwards, in `packages/desktop/tests/e2e/sort-capture-race.spec.ts` (FR-020e, SC-005a)
-- [ ] T052 [US1] Assert the 100 ms decision-to-next-item budget in `packages/desktop/tests/e2e/sort-basic.spec.ts`, treating CI timings as a regression signal with real hardware authoritative, matching Feature 1's latency precedent (SC-002a)
+- [X] T052 [US1] Assert the 100 ms decision-to-next-item budget in `packages/desktop/tests/e2e/sort-basic.spec.ts`, treating CI timings as a regression signal with real hardware authoritative, matching Feature 1's latency precedent (SC-002a)
 - [ ] T053 [P] [US1] E2E: sort a 20-item inbox to zero in one session, asserting each decision took at most two inputs and no step requested anything beyond destination, title, or owner, in `packages/desktop/tests/e2e/sort-throughput.spec.ts` (SC-001, SC-002, SC-006)
 
 **Checkpoint**: User Story 1 is fully functional and demoable. An inbox can be sorted to zero against
@@ -150,18 +150,18 @@ See the honesty note under Dependencies.
 
 ### Tests for User Story 2 ⚠️ WRITE FIRST, CONFIRM THEY FAIL
 
-- [ ] T054 [P] [US2] Failing tests: slug generation, collision suffixes `-2`/`-3` for genuinely different titles, and a title that slugs to empty being rejected, in `packages/core/tests/vault-slug.test.ts` (FR-011, FR-012, research R6)
-- [ ] T055 [P] [US2] Failing tests: stub content is exactly `# Title`, `status: active`, and `## Unprocessed` — with no outcome, milestone, next-action, or DRI field, not even empty — in `packages/core/tests/vault-stub.test.ts` (FR-009)
-- [ ] T056 [P] [US2] Failing tests: `createTitle` matching an existing slug (case and whitespace insensitive) routes to that destination instead of creating a duplicate; empty or whitespace-only title returns `empty-title` and creates nothing, in `packages/core/tests/sort-service.create.test.ts` (FR-011, FR-012)
+- [X] T054 [P] [US2] Failing tests: slug generation, collision suffixes `-2`/`-3` for genuinely different titles, and a title that slugs to empty being rejected, in `packages/core/tests/vault-slug.test.ts` (FR-011, FR-012, research R6)
+- [X] T055 [P] [US2] Failing tests: stub content is exactly `# Title`, `status: active`, and `## Unprocessed` — with no outcome, milestone, next-action, or DRI field, not even empty — in `packages/core/tests/vault-stub.test.ts` (FR-009)
+- [X] T056 [P] [US2] Failing tests: `createTitle` matching an existing slug (case and whitespace insensitive) routes to that destination instead of creating a duplicate; empty or whitespace-only title returns `empty-title` and creates nothing, in `packages/core/tests/sort-service.create.test.ts` (FR-011, FR-012)
 - [ ] T057 [P] [US2] Failing test: create-and-route is one journaled operation — a crash after stub creation never leaves a stub without its item, in `packages/core/tests/sort-create-atomic.test.ts` (FR-008, FR-010, FR-020d)
 
 ### Implementation for User Story 2
 
-- [ ] T058 [P] [US2] Implement title-to-slug conversion and slug-equality matching in `packages/core/src/vault/slug.ts` (FR-012)
-- [ ] T059 [P] [US2] Implement minimal stub rendering in `packages/core/src/vault/stub.ts` (FR-009)
-- [ ] T060 [US2] Extend the commit sequence to create a stub inside the journaled operation in `packages/core/src/sort/commit.ts` (FR-008, FR-010) (depends on T058, T059)
-- [ ] T061 [US2] Extend `SortService.sort()` to handle `createTitle` decisions in `packages/core/src/sort/sort-service.ts` (FR-008, FR-010, FR-011, FR-012) (depends on T060)
-- [ ] T062 [US2] Add the create-destination affordance — one title field, nothing else — to `packages/desktop/src/renderer/sort.ts` (FR-008, FR-009, SC-006)
+- [X] T058 [P] [US2] Implement title-to-slug conversion and slug-equality matching in `packages/core/src/vault/slug.ts` (FR-012)
+- [X] T059 [P] [US2] Implement minimal stub rendering in `packages/core/src/vault/stub.ts` (FR-009)
+- [X] T060 [US2] Extend the commit sequence to create a stub inside the journaled operation in `packages/core/src/sort/commit.ts` (FR-008, FR-010) (depends on T058, T059)
+- [X] T061 [US2] Extend `SortService.sort()` to handle `createTitle` decisions in `packages/core/src/sort/sort-service.ts` (FR-008, FR-010, FR-011, FR-012) (depends on T060)
+- [X] T062 [US2] Add the create-destination affordance — one title field, nothing else — to `packages/desktop/src/renderer/sort.ts` (FR-008, FR-009, SC-006)
 - [ ] T063 [P] [US2] E2E: create a project mid-sort from a title alone; confirm the file's contents and that the new destination appears for later items, in `packages/desktop/tests/e2e/sort-create.spec.ts` (FR-008, FR-009, FR-010)
 - [ ] T064 [P] [US2] E2E: duplicate title reuses the existing destination; empty title creates nothing and leaves the item unsorted, in `packages/desktop/tests/e2e/sort-create-edge.spec.ts` (FR-011, FR-012)
 
@@ -183,12 +183,12 @@ Continue to the end and confirm the empty state.
 
 ### Tests for User Story 3 ⚠️ WRITE FIRST, CONFIRM THEY FAIL
 
-- [ ] T065 [P] [US3] Failing tests: `recover()` completes a journal entry from each of the four crash states, is idempotent when run twice, and reports `abandoned` when the inbox no longer matches `ref`, in `packages/core/tests/sort-recover.test.ts` (FR-020, FR-020d, FR-024, SC-005)
-- [ ] T066 [P] [US3] Failing tests: an inbox of only blank lines reports empty; any routable text — including hand-written — reports not empty, in `packages/core/tests/sort-empty.test.ts` (FR-026, FR-027b, FR-027c, FR-028)
+- [X] T065 [P] [US3] Failing tests: `recover()` completes a journal entry from each of the four crash states, is idempotent when run twice, and reports `abandoned` when the inbox no longer matches `ref`, in `packages/core/tests/sort-recover.test.ts` (FR-020, FR-020d, FR-024, SC-005)
+- [X] T066 [P] [US3] Failing tests: an inbox of only blank lines reports empty; any routable text — including hand-written — reports not empty, in `packages/core/tests/sort-empty.test.ts` (FR-026, FR-027b, FR-027c, FR-028)
 
 ### Implementation for User Story 3
 
-- [ ] T067 [US3] Implement `SortService.recover()` returning a `RecoveryReport` in `packages/core/src/sort/sort-service.ts` (FR-020d, FR-024)
+- [X] T067 [US3] Implement `SortService.recover()` returning a `RecoveryReport` in `packages/core/src/sort/sort-service.ts` (FR-020d, FR-024)
 - [ ] T068 [US3] Call `recover()` at startup, before the sort window can open, in `packages/desktop/src/main/main.ts` (FR-020d, FR-024)
 - [ ] T069 [US3] Emit `sort:recovered` through the existing notice queue when either count is non-zero, in `packages/desktop/src/main/ipc.ts` (FR-020d)
 - [ ] T070 [US3] Implement the empty state — no destination choices offered — in `packages/desktop/src/renderer/sort.ts` (FR-026)

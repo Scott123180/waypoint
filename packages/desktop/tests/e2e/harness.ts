@@ -1,7 +1,7 @@
 import { _electron as electron, type ElectronApplication, type Page } from "@playwright/test";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const MAIN = resolve(__dirname, "../../dist/src/main/main.js");
 
@@ -30,6 +30,16 @@ export interface Harness {
   captureBox(): Promise<Page>;
   isBoxVisible(): Promise<boolean>;
   inbox(): string;
+  /** Seeds inbox.md directly, the way capture or a hand-edit would. */
+  writeInbox(content: string): void;
+  /** Reads any vault file, e.g. "waiting.md" or "projects/roof.md". */
+  vaultFile(relPath: string): string;
+  /** Writes a vault file, creating parent directories. */
+  writeVaultFile(relPath: string, content: string): void;
+  /** Opens the sort view, as the tray entry does. */
+  openSort(): Promise<void>;
+  isSortVisible(): Promise<boolean>;
+  sortView(): Promise<Page>;
   close(): Promise<void>;
 }
 
@@ -173,6 +183,35 @@ export async function launch(
     },
     inbox() {
       return existsSync(inboxPath) ? readFileSync(inboxPath, "utf8") : "";
+    },
+    writeInbox(content: string) {
+      writeFileSync(inboxPath, content, "utf8");
+    },
+    vaultFile(relPath: string) {
+      const p = join(dirname(inboxPath), relPath);
+      return existsSync(p) ? readFileSync(p, "utf8") : "";
+    },
+    writeVaultFile(relPath: string, content: string) {
+      const p = join(dirname(inboxPath), relPath);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, content, "utf8");
+    },
+    async openSort() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showSort();
+      });
+      await new Promise((r) => setTimeout(r, 200));
+    },
+    async isSortVisible() {
+      return app.evaluate(() => {
+        return (globalThis as Record<string, any>)["__waypoint"].isSortVisible();
+      });
+    },
+    async sortView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("sort.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("sort.html"));
     },
     async close() {
       await app.close();
