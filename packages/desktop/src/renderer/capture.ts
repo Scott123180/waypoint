@@ -105,12 +105,26 @@ const statusLabel = document.getElementById("status-label") as HTMLSpanElement;
 const levelMeter = document.getElementById("level-meter") as HTMLSpanElement;
 const levelBars = Array.from(levelMeter.querySelectorAll("i"));
 const elapsed = document.getElementById("elapsed") as HTMLSpanElement;
+const hint = document.getElementById("hint") as HTMLSpanElement;
 
 const LABELS: Record<DictationState, string> = {
   idle: "",
   acquiring: "Starting microphone…",
   recording: "Listening",
   transcribing: "Transcribing…",
+};
+
+/**
+ * What Enter does right now.
+ *
+ * Enter means something different in each state — stop, wait, save — so the
+ * hint tracks the state rather than making the user remember three bindings.
+ */
+const HINTS: Record<DictationState, string> = {
+  idle: "Enter to save · Shift+Enter for a new line · Esc to dismiss",
+  acquiring: "Esc to dismiss",
+  recording: "Enter to stop dictating · Esc to discard",
+  transcribing: "Esc to dismiss",
 };
 
 let state: DictationState = "idle";
@@ -120,6 +134,7 @@ function setState(next: DictationState): void {
   state = next;
   status.dataset["state"] = next;
   statusLabel.textContent = LABELS[next];
+  hint.textContent = HINTS[next];
 
   if (next === "recording") {
     status.dataset["startedAt"] = String(Date.now());
@@ -217,6 +232,21 @@ async function submit(): Promise<void> {
 input.addEventListener("keydown", (event: KeyboardEvent) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
+
+    // One key carries the whole dictation flow: Enter ends the recording, and
+    // the next Enter — once the words have landed in the box — saves them. The
+    // Stop button still works, but reaching for it was the only thing standing
+    // between speaking a thought and having it filed.
+    if (state === "recording") {
+      void stopDictation();
+      return;
+    }
+
+    // Swallowed rather than submitted. Transcription takes seconds, and an
+    // eager Enter in that window would file whatever happened to be in the box
+    // and close it before the words being decoded could arrive.
+    if (state === "transcribing" || state === "acquiring") return;
+
     void submit();
     return;
   }

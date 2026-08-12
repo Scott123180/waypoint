@@ -53,6 +53,20 @@ export class SortWindow {
     this.window?.hide();
   }
 
+  /**
+   * Something wrote to the inbox. Deliberately carries no payload and names no
+   * writer — the view re-reads from disk, which is the only account of the file
+   * that can be trusted anyway.
+   *
+   * Distinct from the `sort:refresh` that `show()` sends: opening the window
+   * should redraw everything, whereas this arrives mid-session and must not
+   * disturb what the user is currently working on. The renderer decides how
+   * much to redraw.
+   */
+  inboxChanged(): void {
+    this.window?.webContents.send("inbox:changed");
+  }
+
   isVisible(): boolean {
     return this.window?.isVisible() ?? false;
   }

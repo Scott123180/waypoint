@@ -32,6 +32,12 @@ export class FsInboxDocument implements InboxDocument {
     private readonly filePath: string,
     private readonly mutex: InboxMutex,
     /**
+     * Raised after a splice lands, so an open view can re-read. Sorting is the
+     * other writer to this file, and it raises the same signal capture does —
+     * listeners are told the inbox changed, never which client changed it.
+     */
+    private readonly onChanged?: () => void,
+    /**
      * Test seam. Runs in the one window a size check cannot cover: after the
      * final `stat`, before the `rename`. A concurrent append landing here is
      * discarded by the rename, so this is what lets the regression test prove
@@ -51,8 +57,12 @@ export class FsInboxDocument implements InboxDocument {
     }
   }
 
-  removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch"> {
-    return this.mutex.run(() => this.spliceWithRetry(start, end, expected));
+  async removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch"> {
+    const result = await this.mutex.run(() => this.spliceWithRetry(start, end, expected));
+    // A mismatch leaves the file exactly as it was, so it is not a change and
+    // must not wake a view: the signal has to mean the bytes actually moved.
+    if (result === "removed") this.onChanged?.();
+    return result;
   }
 
   private async spliceWithRetry(

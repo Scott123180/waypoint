@@ -8,6 +8,7 @@ import { FsInboxDocument } from "./adapters/fs-inbox-document";
 import { FsVaultStore } from "./adapters/fs-vault-store";
 import { FsSortJournal } from "./adapters/fs-sort-journal";
 import { InboxMutex } from "./inbox-mutex";
+import { InboxChanged } from "./inbox-changed";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
 import { SortWindow } from "./sort-window";
@@ -62,8 +63,14 @@ function start(): void {
   // a capture made during a sort is destroyed silently (research R4a).
   const inboxMutex = new InboxMutex();
 
+  // One signal for the whole file, raised by the adapters every writer goes
+  // through. A client added later — the local API, the LLM organization layer —
+  // raises it by writing through the same adapters, with nothing to remember.
+  const inboxChanged = new InboxChanged();
+  const raiseInboxChanged = (): void => inboxChanged.raise();
+
   const service = new CaptureService({
-    inbox: new FsInboxStore(config.inboxPath, inboxMutex),
+    inbox: new FsInboxStore(config.inboxPath, inboxMutex, raiseInboxChanged),
     transcription,
     onError: (error: InboxWriteError) =>
       emitNotice({
@@ -74,13 +81,17 @@ function start(): void {
   });
 
   const sortService = new SortService({
-    inbox: new FsInboxDocument(config.inboxPath, inboxMutex),
+    inbox: new FsInboxDocument(config.inboxPath, inboxMutex, raiseInboxChanged),
     vault: new FsVaultStore(config.vaultRoot),
     journal: new FsSortJournal(sortJournalPath(env)),
   });
 
   const sortWindow = new SortWindow();
   const showSort = (): void => sortWindow.show();
+
+  // The sort view is the only subscriber today. Later views subscribe here too
+  // rather than each writer learning who is listening.
+  inboxChanged.subscribe(() => sortWindow.inboxChanged());
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>

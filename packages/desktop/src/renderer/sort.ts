@@ -47,6 +47,7 @@ interface SortApi {
   ): Promise<{ ok: true; destination: string } | { ok: false; reason: string; message: string }>;
   dismiss(): void;
   onRefresh(callback: () => void): void;
+  onInboxChanged(callback: () => void): void;
   onRecovered(callback: (report: { completed: number; abandoned: number }) => void): void;
   onNotice(callback: (notice: { level: "info" | "error"; message: string }) => void): void;
 }
@@ -82,6 +83,17 @@ function updateProgress(left: number): void {
   const done = sessionTotal - left;
   const fraction = sessionTotal === 0 ? 1 : done / sessionTotal;
   progressBar.style.width = `${Math.round(fraction * 100)}%`;
+}
+
+/**
+ * The counter and the bar, which track the *file* rather than the card on
+ * screen. Split out of `showNext` so an item arriving mid-session can move
+ * them without redrawing anything the user is looking at.
+ */
+async function refreshTally(): Promise<void> {
+  const count = await api.count();
+  remaining.textContent = count === 1 ? "1 item left" : `${count} items left`;
+  updateProgress(count);
 }
 
 /** The footer says what the keyboard does *now*, which changes with the panel. */
@@ -145,9 +157,7 @@ async function showNext(): Promise<void> {
   void stage.offsetWidth;
   stage.classList.add("enter");
 
-  const count = await api.count();
-  remaining.textContent = count === 1 ? "1 item left" : `${count} items left`;
-  updateProgress(count);
+  await refreshTally();
 }
 
 /**
@@ -370,6 +380,29 @@ document.addEventListener("keydown", (event) => {
 });
 
 api.onRefresh(() => void showNext());
+
+/**
+ * The inbox changed underneath an open session — a capture, an undo, or a
+ * client writing from outside the GUI.
+ *
+ * How much to redraw depends on whether anything is on screen:
+ *
+ * - **Empty state showing.** Nothing to disturb, and no decision left that
+ *   could ever pull the arrival in, so this is the one case that must redraw
+ *   the card. Without it the view stays at inbox zero until it is closed and
+ *   reopened, with the new thought sitting on disk and invisible.
+ * - **An item showing.** Only the tally moves. `showNext` closes any open
+ *   picker, and discarding a half-typed project name is far worse than letting
+ *   an arrival wait — it is queued behind the current item and will be reached
+ *   by sorting anyway. The counter going up is the feedback that it landed.
+ */
+api.onInboxChanged(() => {
+  if (!emptyState.hidden) {
+    void showNext();
+    return;
+  }
+  void refreshTally();
+});
 
 api.onRecovered((report) => {
   if (report.abandoned > 0) {

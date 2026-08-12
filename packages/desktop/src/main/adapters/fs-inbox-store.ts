@@ -26,15 +26,27 @@ export class FsInboxStore implements InboxStore {
   constructor(
     private readonly filePath: string,
     private readonly mutex: InboxMutex,
+    /**
+     * Raised after a write lands, so an open view can re-read. Hung here rather
+     * than off the IPC handler that started the capture: `submit` returns when
+     * the write is *queued*, and a signal raised there would send listeners
+     * back to a file that does not contain the item yet.
+     */
+    private readonly onChanged?: () => void,
   ) {}
 
-  append(block: string): Promise<{ offsetBefore: number }> {
-    return this.mutex.run(() => this.appendLocked(block));
+  async append(block: string): Promise<{ offsetBefore: number }> {
+    // Raised outside the lock, and only on success — a throw propagates past
+    // this and no listener is told about a write that did not happen.
+    const result = await this.mutex.run(() => this.appendLocked(block));
+    this.onChanged?.();
+    return result;
   }
 
-  /** Truncation is a write too, so undo shares the lock. */
-  truncate(length: number): Promise<void> {
-    return this.mutex.run(() => fsTruncate(this.filePath, length));
+  /** Truncation is a write too, so undo shares the lock — and the signal. */
+  async truncate(length: number): Promise<void> {
+    await this.mutex.run(() => fsTruncate(this.filePath, length));
+    this.onChanged?.();
   }
 
   private async appendLocked(block: string): Promise<{ offsetBefore: number }> {

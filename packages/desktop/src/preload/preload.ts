@@ -116,6 +116,17 @@ const sortApi = {
     ipcRenderer.on("sort:refresh", () => callback());
   },
 
+  /**
+   * The inbox changed while this view was open.
+   *
+   * The channel is `inbox:changed`, not `sort:something`: it is named for the
+   * file, so capture, undo, sort, and any client added later all raise the one
+   * event, and a future view subscribes to it without a new channel.
+   */
+  onInboxChanged(callback: () => void): void {
+    ipcRenderer.on("inbox:changed", () => callback());
+  },
+
   onRecovered(callback: (report: { completed: number; abandoned: number }) => void): void {
     ipcRenderer.on("sort:recovered", (_event, report) => callback(report));
   },

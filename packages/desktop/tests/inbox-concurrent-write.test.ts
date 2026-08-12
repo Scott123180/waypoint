@@ -151,7 +151,7 @@ describe("the lost-update window, deterministically", () => {
       const store = new FsInboxStore(vault.inboxPath, passthroughMutex);
       const ref = secondItem();
 
-      const doc = new FsInboxDocument(vault.inboxPath, passthroughMutex, async () => {
+      const doc = new FsInboxDocument(vault.inboxPath, passthroughMutex, undefined, async () => {
         // Unserialized, this append goes straight to the doomed inode.
         await store.append("- 2026-08-11T10:00:00-04:00 doomed capture\n");
       });
@@ -179,7 +179,7 @@ describe("the lost-update window, deterministically", () => {
       const ref = secondItem();
 
       let queued: Promise<unknown> = Promise.resolve();
-      const doc = new FsInboxDocument(vault.inboxPath, mutex, () => {
+      const doc = new FsInboxDocument(vault.inboxPath, mutex, undefined, () => {
         // The lock is held, so this queues behind the rewrite instead of
         // racing it. Not awaited here — awaiting inside the critical section
         // would deadlock, which is itself the point.

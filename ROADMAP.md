@@ -55,16 +55,47 @@ Plain-text, git-tracked, stored **outside** the application repo:
 - [ ] **Feature 5 — Weekly review ritual** (scripted: inbox must be zero,
       per-project status update, stale waiting-for check, set next week's
       top three, writes to log/YYYY-WW.md)
-- [ ] **Feature 6 — Local HTTP/JSON API** (exposes core verbs so non-GUI
+- [ ] **Feature 6 — Achievement / retrospective view** (every milestone and
+      project completed within a given date range, across all projects, so
+      the user can see what they actually got done — year-end reviews,
+      performance conversations, 1:1s. Reads the completion dates Feature 3
+      records when a milestone or project is marked done; captures nothing
+      new of its own)
+- [ ] **Feature 7 — Local HTTP/JSON API** (exposes core verbs so non-GUI
       clients, including an AI agent, can call capture/sort/review/etc.)
-- [ ] **Feature 7 — LLM-assisted inbox organization** (splits messy
+- [ ] **Feature 8 — LLM-assisted inbox organization** (splits messy
       dictated streams into distinct items, suggests project/area/
       waiting-for placement; suggest-don't-decide, human confirms during
       sort; built as a client of the API, not baked into the core)
-- [ ] **Feature 8 — Daily shutdown** (2-minute end-of-day: view top-three +
+- [ ] **Feature 9 — Daily shutdown** (2-minute end-of-day: view top-three +
       due waiting-for follow-ups, capture loose threads). Calendar-flagged
       items carry a flag date so this feature can surface the ones left
       unscheduled too long, the same way waiting-for goes stale
+
+## Known gaps
+
+Real defects found in shipped behaviour, kept here rather than in a feature
+spec because each one is a fix to something that already exists.
+
+- [ ] **Dictation does not survive losing focus** — the capture box hides on
+      blur (clicking any other window), but hiding does not stop the
+      recording. Verified against the running app: after the window hides the
+      renderer stays in `recording`, the level meter keeps moving, and the
+      microphone stays live on a window nobody can see. Reopening with either
+      hotkey then sends `capture:reset`, which tears the recording down and
+      clears the box — so everything said before clicking away is silently
+      discarded, and there is no way back to the in-progress dictation.
+      Three things are tangled here and a fix should say which it is doing:
+      (a) hide-on-blur while recording, (b) what happens to audio already
+      captured when the box goes away — discarding it is the current answer
+      and the wrong one, transcribing it into the reopened box is probably
+      the right one, (c) Enter/Esc only reach the box while it has focus, so
+      a recording that has lost focus cannot be stopped from the keyboard at
+      all. A global accelerator registered only while recording would fix
+      (c), at the cost of taking a key combination system-wide for the
+      duration. The privacy angle makes this more than an annoyance: a live
+      microphone with no visible indicator is exactly what the Escape path
+      already refuses to leave behind.
 
 ## Key decisions log
 
@@ -86,7 +117,7 @@ Plain-text, git-tracked, stored **outside** the application repo:
   larger bundle (~500MB), accepted deliberately.
 - **Capture vs. organize kept separate** — capture is always raw and
   dumb (GTD principle); any LLM-assisted organizing is a distinct later
-  feature (Feature 7), not part of capture itself.
+  feature (Feature 8), not part of capture itself.
 - **Trash is a soft delete** — sort has no undo and runs fast, so the one
   irreversible choice in the flow would be the one you make by mis-clicking.
   Items go to `trash.md` instead. It grows without bound; pruning is
@@ -100,3 +131,14 @@ Plain-text, git-tracked, stored **outside** the application repo:
   the same time, so a decision re-checks the item still matches disk and
   refuses on mismatch, mirroring capture's undo tail verification. Refusing
   is recoverable; writing stale text into a project is not.
+- **Completed milestones stay on the project** — finishing a milestone does
+  not hide it, and the completion date is written down permanently rather
+  than discarded once the work is done. The history sitting on disk is what
+  makes the retrospective view (Feature 6) possible with no extra capture
+  step asked of the user.
+- **Views react to an inbox-changed signal** — an open view must reflect
+  changes to its underlying data that happen while it is open. Any client
+  that writes to the inbox raises a generic inbox-changed signal, and views
+  react to that rather than requiring a close and reopen. This is what lets
+  the local API (Feature 7) and the LLM organization layer (Feature 8) write
+  to the inbox from outside the GUI without leaving a stale view on screen.
