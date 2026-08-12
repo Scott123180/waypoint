@@ -43,7 +43,7 @@ Plain-text, git-tracked, stored **outside** the application repo:
 
 - [ ] **Feature 1 — Quick capture** (text + voice, offline whisper.cpp,
       transcript shown back with edit/undo, raw items appended to inbox.md)
-- [ ] **Feature 2 — Inbox view + sort** (walk inbox items one at a time,
+- [x] **Feature 2 — Inbox view + sort** (walk inbox items one at a time,
       route to project / area / waiting-for / trash / calendar, empties
       inbox to zero)
 - [ ] **Feature 3 — Projects with milestones** (outcome, 2–4 milestones,

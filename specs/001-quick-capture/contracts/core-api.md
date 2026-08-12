@@ -125,7 +125,14 @@ item (R4). Not called on the capture hot path.
 1. Timestamps are core-assigned; no client invents a capture time.
 2. Empty input never produces an item.
 3. Inbox order matches submit order.
-4. Existing inbox bytes are never rewritten or reformatted.
+4. **Capture** never rewrites or reformats existing inbox bytes; it only appends.
+   *Amended by Feature 2.* This originally read "existing inbox bytes are never rewritten" full stop,
+   which was accurate while capture was the only writer. Sorting removes an item from the middle of the
+   file, which no append can express, so `FsInboxDocument` rebuilds the file and renames it into place.
+   The half of the promise that still holds absolutely is the one that matters to the user: **nothing
+   reformats what they wrote.** An unsorted line comes through a sort byte-for-byte identical, asserted in
+   `sort-preservation.test.ts`. Both writers share one in-process mutex, so a capture can never be lost to
+   a concurrent rewrite (see 002's research R4a).
 5. Undo never deletes unverified content.
 6. A transcript is never stored without passing through the user-visible box.
 7. Audio is never persisted.

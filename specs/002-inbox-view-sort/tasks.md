@@ -126,11 +126,11 @@ unsorted byte is unchanged — with no destination creation involved.
 - [X] T047 [US1] Add `showSort`, `hideSort`, and `isSortVisible` to the existing `WAYPOINT_E2E` seam in `packages/desktop/src/main/main.ts`
 - [X] T047a [US1] After a successful `sort:decide`, call the existing `CaptureService.expireUndoWindow()` in `packages/desktop/src/main/ipc.ts`. `performUndo` already refuses safely once the inbox has been spliced (research R4b) — this only replaces a confusing refusal with no affordance at all. Do **not** add a size assertion to `performUndo`; the existing tail arithmetic already excludes every case it would catch
 - [X] T048 [P] [US1] E2E: one item at a time, five destinations, item leaves the inbox and lands in its file; assert no date/time prompt appears on the calendar choice, in `packages/desktop/tests/e2e/sort-basic.spec.ts` (FR-001, FR-004, FR-005, FR-017a, FR-019)
-- [ ] T049 [P] [US1] E2E: a hand-written item is routable and displays no timestamp; a multi-line item moves whole, in `packages/desktop/tests/e2e/sort-handwritten.spec.ts` (FR-003, FR-027, FR-027a)
-- [ ] T050 [P] [US1] E2E: hand-edit the current item's line on disk mid-decision, then decide — expect refusal, re-present, and zero bytes written anywhere, in `packages/desktop/tests/e2e/sort-hand-edit-race.spec.ts` (FR-020a, FR-020b, SC-004a)
-- [ ] T051 [P] [US1] E2E: fire a capture via the existing test seam while a sort decision is committing; assert the captured item is in the inbox afterwards, in `packages/desktop/tests/e2e/sort-capture-race.spec.ts` (FR-020e, SC-005a)
+- [X] T049 [P] [US1] E2E: a hand-written item is routable and displays no timestamp; a multi-line item moves whole, in `packages/desktop/tests/e2e/sort-handwritten.spec.ts` (FR-003, FR-027, FR-027a)
+- [X] T050 [P] [US1] E2E: hand-edit the current item's line on disk mid-decision, then decide — expect refusal, re-present, and zero bytes written anywhere, in `packages/desktop/tests/e2e/sort-hand-edit-race.spec.ts` (FR-020a, FR-020b, SC-004a)
+- [X] T051 [P] [US1] E2E: fire a capture via the existing test seam while a sort decision is committing; assert the captured item is in the inbox afterwards, in `packages/desktop/tests/e2e/sort-capture-race.spec.ts` (FR-020e, SC-005a)
 - [X] T052 [US1] Assert the 100 ms decision-to-next-item budget in `packages/desktop/tests/e2e/sort-basic.spec.ts`, treating CI timings as a regression signal with real hardware authoritative, matching Feature 1's latency precedent (SC-002a)
-- [ ] T053 [P] [US1] E2E: sort a 20-item inbox to zero in one session, asserting each decision took at most two inputs and no step requested anything beyond destination, title, or owner, in `packages/desktop/tests/e2e/sort-throughput.spec.ts` (SC-001, SC-002, SC-006)
+- [X] T053 [P] [US1] E2E: sort a 20-item inbox to zero in one session, asserting each decision took at most two inputs and no step requested anything beyond destination, title, or owner, in `packages/desktop/tests/e2e/sort-throughput.spec.ts` (SC-001, SC-002, SC-006)
 
 **Checkpoint**: User Story 1 is fully functional and demoable. An inbox can be sorted to zero against
 existing destinations. This is the MVP.
@@ -153,7 +153,7 @@ See the honesty note under Dependencies.
 - [X] T054 [P] [US2] Failing tests: slug generation, collision suffixes `-2`/`-3` for genuinely different titles, and a title that slugs to empty being rejected, in `packages/core/tests/vault-slug.test.ts` (FR-011, FR-012, research R6)
 - [X] T055 [P] [US2] Failing tests: stub content is exactly `# Title`, `status: active`, and `## Unprocessed` — with no outcome, milestone, next-action, or DRI field, not even empty — in `packages/core/tests/vault-stub.test.ts` (FR-009)
 - [X] T056 [P] [US2] Failing tests: `createTitle` matching an existing slug (case and whitespace insensitive) routes to that destination instead of creating a duplicate; empty or whitespace-only title returns `empty-title` and creates nothing, in `packages/core/tests/sort-service.create.test.ts` (FR-011, FR-012)
-- [ ] T057 [P] [US2] Failing test: create-and-route is one journaled operation — a crash after stub creation never leaves a stub without its item, in `packages/core/tests/sort-create-atomic.test.ts` (FR-008, FR-010, FR-020d)
+- [X] T057 [P] [US2] Failing test: create-and-route is one journaled operation — a crash after stub creation never leaves a stub without its item, in `packages/core/tests/sort-create-atomic.test.ts` (FR-008, FR-010, FR-020d)
 
 ### Implementation for User Story 2
 
@@ -162,8 +162,8 @@ See the honesty note under Dependencies.
 - [X] T060 [US2] Extend the commit sequence to create a stub inside the journaled operation in `packages/core/src/sort/commit.ts` (FR-008, FR-010) (depends on T058, T059)
 - [X] T061 [US2] Extend `SortService.sort()` to handle `createTitle` decisions in `packages/core/src/sort/sort-service.ts` (FR-008, FR-010, FR-011, FR-012) (depends on T060)
 - [X] T062 [US2] Add the create-destination affordance — one title field, nothing else — to `packages/desktop/src/renderer/sort.ts` (FR-008, FR-009, SC-006)
-- [ ] T063 [P] [US2] E2E: create a project mid-sort from a title alone; confirm the file's contents and that the new destination appears for later items, in `packages/desktop/tests/e2e/sort-create.spec.ts` (FR-008, FR-009, FR-010)
-- [ ] T064 [P] [US2] E2E: duplicate title reuses the existing destination; empty title creates nothing and leaves the item unsorted, in `packages/desktop/tests/e2e/sort-create-edge.spec.ts` (FR-011, FR-012)
+- [X] T063 [P] [US2] E2E: create a project mid-sort from a title alone; confirm the file's contents and that the new destination appears for later items, in `packages/desktop/tests/e2e/sort-create.spec.ts` (FR-008, FR-009, FR-010)
+- [X] T064 [P] [US2] E2E: duplicate title reuses the existing destination; empty title creates nothing and leaves the item unsorted, in `packages/desktop/tests/e2e/sort-create-edge.spec.ts` (FR-011, FR-012)
 
 **Checkpoint**: User Stories 1 and 2 both work. A sort session no longer stalls when reality outruns the
 existing structure.
@@ -189,12 +189,12 @@ Continue to the end and confirm the empty state.
 ### Implementation for User Story 3
 
 - [X] T067 [US3] Implement `SortService.recover()` returning a `RecoveryReport` in `packages/core/src/sort/sort-service.ts` (FR-020d, FR-024)
-- [ ] T068 [US3] Call `recover()` at startup, before the sort window can open, in `packages/desktop/src/main/main.ts` (FR-020d, FR-024)
-- [ ] T069 [US3] Emit `sort:recovered` through the existing notice queue when either count is non-zero, in `packages/desktop/src/main/ipc.ts` (FR-020d)
-- [ ] T070 [US3] Implement the empty state — no destination choices offered — in `packages/desktop/src/renderer/sort.ts` (FR-026)
-- [ ] T071 [P] [US3] E2E: sort two items, hard-quit the app, relaunch, confirm decisions survived and sorting resumes at the third item, in `packages/desktop/tests/e2e/sort-resume.spec.ts` (FR-024, FR-025, SC-004)
-- [ ] T072 [P] [US3] E2E: sort to zero, confirm the empty state and that reopening the view shows it immediately, in `packages/desktop/tests/e2e/sort-zero.spec.ts` (FR-026, FR-028, SC-009)
-- [ ] T073 [P] [US3] E2E: an inbox assembled entirely by hand, containing no timestamps at all, sorts to zero through the same flow, in `packages/desktop/tests/e2e/sort-handwritten-inbox.spec.ts` (FR-027, FR-027c, SC-009a)
+- [X] T068 [US3] Call `recover()` at startup, before the sort window can open, in `packages/desktop/src/main/main.ts` (FR-020d, FR-024)
+- [X] T069 [US3] Emit `sort:recovered` through the existing notice queue when either count is non-zero, in `packages/desktop/src/main/ipc.ts` (FR-020d)
+- [X] T070 [US3] Implement the empty state — no destination choices offered — in `packages/desktop/src/renderer/sort.ts` (FR-026)
+- [X] T071 [P] [US3] E2E: sort two items, hard-quit the app, relaunch, confirm decisions survived and sorting resumes at the third item, in `packages/desktop/tests/e2e/sort-resume.spec.ts` (FR-024, FR-025, SC-004)
+- [X] T072 [P] [US3] E2E: sort to zero, confirm the empty state and that reopening the view shows it immediately, in `packages/desktop/tests/e2e/sort-zero.spec.ts` (FR-026, FR-028, SC-009)
+- [X] T073 [P] [US3] E2E: an inbox assembled entirely by hand, containing no timestamps at all, sorts to zero through the same flow, in `packages/desktop/tests/e2e/sort-handwritten-inbox.spec.ts` (FR-027, FR-027c, SC-009a)
 
 **Checkpoint**: All three user stories independently functional. Inbox zero is reachable and observable.
 
@@ -202,17 +202,17 @@ Continue to the end and confirm the empty state.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T074 [P] Amend guarantee #4 in `specs/001-quick-capture/contracts/core-api.md` to scope append-only to capture, per research R3
-- [ ] T075 [P] Amend the "appends only; existing bytes never rewritten" rule in `specs/001-quick-capture/contracts/inbox-format.md` likewise, noting that Feature 2 splices and that both writers share a mutex (research R3, R4a)
-- [ ] T076 [P] Byte-preservation regression test over a hand-shaped vault — headings, stray notes, Feature 3-style sections, no trailing newline — asserting only the sorted item's bytes change, in `packages/core/tests/sort-preservation.test.ts` (FR-021, FR-023, FR-027d, SC-003a)
-- [ ] T077 [P] Performance test: parsing a 1,000-item inbox completes under 50 ms, in `packages/core/tests/inbox-parse-perf.test.ts` (SC-002a)
-- [ ] T078 [P] Assert `destinations()` returns a stable, unranked order and that no API field can express a suggestion, in `packages/core/tests/sort-no-suggestion.test.ts` (FR-030, SC-007)
-- [ ] T079 [P] Assert the out-of-scope guarantees hold: no API or IPC channel offers item editing, reordering, bulk action, undo of a completed decision, or a purge of the discard list, in `packages/core/tests/sort-scope-boundaries.test.ts` (FR-016a, FR-032)
-- [ ] T080 [P] Automated offline assertion in `packages/core/tests/sort-offline.test.ts`: Node cannot revoke its own network access mid-process, so assert it statically instead — walk the compiled `packages/core/dist/src/sort/`, `vault/`, and `inbox/` output and fail on any `require`/`import` of `net`, `tls`, `http`, `https`, `dgram`, or `node:fetch`, and assert `globalThis.fetch` is never referenced. Manual verification stays with quickstart §10 (FR-031, SC-008)
-- [ ] T081 [P] Review `packages/desktop/src/renderer/sort.ts` and `packages/desktop/src/main/ipc.ts` for domain logic leakage; the renderer must hold no notion of what a destination is (Principle II)
+- [X] T074 [P] Amend guarantee #4 in `specs/001-quick-capture/contracts/core-api.md` to scope append-only to capture, per research R3
+- [X] T075 [P] Amend the "appends only; existing bytes never rewritten" rule in `specs/001-quick-capture/contracts/inbox-format.md` likewise, noting that Feature 2 splices and that both writers share a mutex (research R3, R4a)
+- [X] T076 [P] Byte-preservation regression test over a hand-shaped vault — headings, stray notes, Feature 3-style sections, no trailing newline — asserting only the sorted item's bytes change, in `packages/core/tests/sort-preservation.test.ts` (FR-021, FR-023, FR-027d, SC-003a)
+- [X] T077 [P] Performance test: parsing a 1,000-item inbox completes under 50 ms, in `packages/core/tests/inbox-parse-perf.test.ts` (SC-002a)
+- [X] T078 [P] Assert `destinations()` returns a stable, unranked order and that no API field can express a suggestion, in `packages/core/tests/sort-no-suggestion.test.ts` (FR-030, SC-007)
+- [X] T079 [P] Assert the out-of-scope guarantees hold: no API or IPC channel offers item editing, reordering, bulk action, undo of a completed decision, or a purge of the discard list, in `packages/core/tests/sort-scope-boundaries.test.ts` (FR-016a, FR-032)
+- [X] T080 [P] Automated offline assertion in `packages/core/tests/sort-offline.test.ts`: Node cannot revoke its own network access mid-process, so assert it statically instead — walk the compiled `packages/core/dist/src/sort/`, `vault/`, and `inbox/` output and fail on any `require`/`import` of `net`, `tls`, `http`, `https`, `dgram`, or `node:fetch`, and assert `globalThis.fetch` is never referenced. Manual verification stays with quickstart §10 (FR-031, SC-008)
+- [X] T081 [P] Review `packages/desktop/src/renderer/sort.ts` and `packages/desktop/src/main/ipc.ts` for domain logic leakage; the renderer must hold no notion of what a destination is (Principle II)
 - [ ] T082 Run the full validation guide at `specs/002-inbox-view-sort/quickstart.md` on the Linux dev machine, including scenario 8 by hand and scenario 10 with the network disconnected (SC-003)
 - [ ] T083 Confirm `.github/workflows/ci.yml` passes on push, then verify the macOS artifact produced by `.github/workflows/release.yml` on the MacBook — download only, no local build, per the ROADMAP build-machine rule
-- [ ] T084 [P] Tick Feature 2 in the feature sequence in `ROADMAP.md`
+- [X] T084 [P] Tick Feature 2 in the feature sequence in `ROADMAP.md`
 
 ---
 
@@ -321,3 +321,22 @@ Task: "multi-line item moves whole in packages/core/tests/sort-multiline.test.ts
 - Stop at any checkpoint to validate a story independently
 - No new dependencies are introduced by any task here; if one seems necessary, that is a signal to re-read
   [research.md](research.md) rather than to run `npm install`
+
+---
+
+## Implementation notes
+
+**T081 audit result (renderer domain-logic leakage)**: passes. `renderer/sort.ts` knows no vault path, no
+file grammar, no slug rule, and no date rule — its only `Date` use is `toLocaleString()` for display. It
+names `project`, `area`, and `waiting` only as vocabulary, which Principle VII requires it to share rather
+than invent. `ipc.ts` translates shapes (`item: null`) and coordinates the client (expiring capture's undo
+window) but decides nothing about destinations.
+
+**Known flakiness**: `transcript-insert.spec.ts` intermittently fails two of its ten tests when the whole
+E2E suite runs in one process (`workers: 1`, ~83 Electron launches). Both pass consistently when that spec
+runs alone. Pre-existing Feature 1 behaviour, unrelated to sort — noted here so the next person does not
+mistake it for a sort regression.
+
+**Not done here** (require a human or CI):
+- T082 — the manual quickstart walkthrough, including scenario 8 by hand and scenario 10 offline
+- T083 — CI green on push, then the macOS artifact verified on the MacBook

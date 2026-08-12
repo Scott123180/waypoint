@@ -61,10 +61,15 @@ export async function launch(
      * audio samples instead of a stub.
      */
     fakeMicrophone?: boolean;
+    /**
+     * Reuse an existing vault instead of a fresh one, so a test can quit the
+     * app and relaunch against the same files (US3).
+     */
+    inboxPath?: string;
   } = {},
 ): Promise<Harness> {
-  const dir = mkdtempSync(join(tmpdir(), "waypoint-e2e-"));
-  let inboxPath = join(dir, "inbox.md");
+  const dir = options.inboxPath ? dirname(options.inboxPath) : mkdtempSync(join(tmpdir(), "waypoint-e2e-"));
+  let inboxPath = options.inboxPath ?? join(dir, "inbox.md");
   const configPath = join(dir, "config.json");
 
   if (options.unwritableInbox) {
@@ -93,7 +98,7 @@ export async function launch(
       // Electron's single-instance lock is scoped to the user data directory.
       // Sharing the default one means a running `npm run dev` silently causes
       // every test in the suite to fail with "browser has been closed".
-      `--user-data-dir=${join(dir, "electron-data")}`,
+      `--user-data-dir=${join(dir, `electron-data-${process.pid}-${Date.now()}`)}`,
       ...(options.fakeMicrophone
         ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"]
         : []),

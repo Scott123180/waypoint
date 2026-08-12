@@ -36,7 +36,7 @@ timestamp   := ISO 8601 date-time with local UTC offset, seconds precision
 | Continuation lines indented exactly two spaces | Standard markdown list continuation, so multi-paragraph dictation stays inside its item and still renders correctly |
 | Item text is stored **verbatim** | Capture is raw (FR-014). No capitalization, punctuation, reflow, or trailing-period fixes. |
 | File ends with a trailing newline | Makes the next append safe and keeps the file POSIX-clean |
-| Appends only; existing bytes never rewritten | Protects hand-edits (FR-016) |
+| **Capture** appends only; it never rewrites existing bytes | Protects hand-edits (FR-016) |
 | No front-matter, ids, tags, or status fields | Capture collects none of it; writing empty metadata fields would be noise the user has to maintain |
 
 ## Append behaviour
@@ -56,7 +56,21 @@ The user is expected to edit this file directly, so the app MUST NOT be strict a
 - The only case where the app inspects existing content is undo tail verification, which
   **refuses** on any mismatch rather than modifying anything (see [core-api.md](core-api.md)).
 
+## Amended by Feature 2 (inbox view + sort)
+
+Sorting removes an item from the middle of this file, which no append can express. `FsInboxDocument`
+therefore rebuilds the file and `rename`s it into place. Two things keep that safe:
+
+- **Nothing is reformatted.** Removal is a byte splice of one item's exact range; every other byte —
+  including blank lines, hand-written notes, and a missing trailing newline — survives untouched.
+- **Both writers share one mutex.** A capture landing during a sort would otherwise be written to the
+  inode the rename discards. See `specs/002-inbox-view-sort/research.md` R4a.
+
+One clarification this file originally got wrong: a blank line **followed by an indented line** is
+*interior* to an item, not a separator. That is what capture writes for a dictated thought containing a
+paragraph break, and the parser has to agree or one thought comes back as two.
+
 ## Non-goals for this feature
 
 Parsing this file back into structured items is **not** implemented here. Capture writes; Feature 2
-reads. Building a parser now would be speculative work against a consumer that does not exist yet.
+reads — see `specs/002-inbox-view-sort/contracts/inbox-parse.md` for the grammar it accepts.
