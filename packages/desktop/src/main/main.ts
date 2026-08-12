@@ -1,4 +1,4 @@
-import { app, globalShortcut, type Tray } from "electron";
+import { app, globalShortcut } from "electron";
 import { join } from "node:path";
 
 import { CaptureService, SortService, type InboxWriteError } from "@waypoint/core";
@@ -15,9 +15,9 @@ import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./confi
 import { registerHotkeys, type Notice } from "./hotkey";
 import { registerIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
-import { createTray } from "./tray";
+import { createTray, type TrayHandle } from "./tray";
 
-let tray: Tray | undefined;
+let tray: TrayHandle | undefined;
 
 function start(): void {
   // Binary and model both resolve from here, so they cannot drift apart.
@@ -83,7 +83,9 @@ function start(): void {
   const showSort = (): void => sortWindow.show();
 
   captureWindow.create();
-  registerIpc(service, captureWindow, sortService, () => sortWindow.hide());
+  registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
+    tray?.refresh(),
+  );
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).
@@ -100,6 +102,7 @@ function start(): void {
 
     const lastText = service.undoableText() ?? "";
     const outcome = await service.undo(id);
+    tray?.refresh();
 
     if (!outcome.ok && outcome.reason === "file-changed") {
       // Refusing is the safe answer, but the thought must stay recoverable, so

@@ -2,6 +2,15 @@ import { Menu, Tray, nativeImage, app } from "electron";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 
+import { createRefresher } from "./menu-state";
+import { trayIconFile, trayIconIsTemplate } from "./resources";
+
+export interface TrayHandle {
+  /** Re-reads `canUndo` and rebuilds the menu if the answer changed. */
+  refresh(): void;
+  destroy(): void;
+}
+
 export interface TrayActions {
   onCapture: () => void;
   /** Opens the box already dictating, the same as the dictate hotkey. */
@@ -25,7 +34,7 @@ export interface TrayActions {
  * submit (FR-013); keeping it open to show an undo button would be exactly the
  * blocking step FR-010 forbids.
  */
-export function createTray(actions: TrayActions): Tray | undefined {
+export function createTray(actions: TrayActions): TrayHandle | undefined {
   try {
     const tray = new Tray(trayImage());
     tray.setToolTip("Waypoint — capture a thought");
@@ -40,12 +49,16 @@ export function createTray(actions: TrayActions): Tray | undefined {
         { label: "Quit Waypoint", click: () => app.quit() },
       ]);
 
-    tray.setContextMenu(buildMenu());
-    // Rebuilt on open so the undo item reflects whether anything is undoable.
-    tray.on("right-click", () => tray.setContextMenu(buildMenu()));
+    // Rebuilt whenever undoability changes, not on menu open: Linux app
+    // indicators never fire the open events, so waiting for one there left the
+    // undo item disabled forever. See menu-state.ts.
+    const refresh = createRefresher(actions.canUndo, () => tray.setContextMenu(buildMenu()));
+    refresh();
+
+    tray.on("right-click", refresh);
     tray.on("click", actions.onCapture);
 
-    return tray;
+    return { refresh, destroy: () => tray.destroy() };
   } catch (err) {
     // Some Linux desktops have no system tray at all. That is survivable — the
     // hotkey and `activate` handler still work — so it must not stop startup.
@@ -55,21 +68,24 @@ export function createTray(actions: TrayActions): Tray | undefined {
 }
 
 /**
- * macOS treats an image named `…Template` as a template image and recolours it
- * for light/dark menu bars. An empty image renders as a blank, unclickable-
- * looking gap, so fall back only if the asset is genuinely missing.
+ * The tray icon, picked per platform — see `trayIconFile` for why the two
+ * differ. An empty image renders as a blank, unclickable-looking gap, so fall
+ * back only if the asset is genuinely missing.
  */
 function trayImage(): Electron.NativeImage {
+  const file = trayIconFile(process.platform);
   const candidates = [
-    join(__dirname, "..", "..", "..", "build", "trayTemplate.png"),
-    join(process.resourcesPath ?? "", "build", "trayTemplate.png"),
+    join(__dirname, "..", "..", "..", "build", file),
+    join(process.resourcesPath ?? "", "build", file),
   ];
 
   for (const path of candidates) {
     if (existsSync(path)) {
       const image = nativeImage.createFromPath(path);
       if (!image.isEmpty()) {
-        image.setTemplateImage(true);
+        // Marking a non-template image as one is not merely useless off macOS;
+        // it is how the icon ended up painted black on a black GNOME top bar.
+        if (trayIconIsTemplate(process.platform)) image.setTemplateImage(true);
         return image;
       }
     }

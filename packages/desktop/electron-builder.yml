@@ -18,7 +18,9 @@ directories:
 
 files:
   - dist/**/*
-  - build/trayTemplate*.png
+  # Both variants, at both scales: macOS uses the template, everything else the
+  # light one. Shipping only one leaves the other platform with a blank tray.
+  - build/tray*.png
   - package.json
   - "!dist/tests/**"
   - "!**/*.map"

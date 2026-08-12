@@ -25,8 +25,14 @@ export function registerIpc(
   window: CaptureWindow,
   sort?: SortService,
   hideSort?: () => void,
+  /**
+   * Called whenever something may have opened or closed the undo window, so the
+   * tray menu can follow. Linux never gets a menu-open event to refresh on, so
+   * the change has to be pushed from here.
+   */
+  onUndoableChange?: () => void,
 ): void {
-  if (sort) registerSortIpc(sort, service, hideSort);
+  if (sort) registerSortIpc(sort, service, hideSort, onUndoableChange);
 
   ipcMain.handle(
     "capture:transcribe",
@@ -43,6 +49,7 @@ export function registerIpc(
     async (_event, text: string, source: "typed" | "dictated"): Promise<SubmitResponse> => {
       try {
         const result = await service.submit(text, source);
+        onUndoableChange?.();
         return { ok: true, id: result.id };
       } catch (err) {
         if (err instanceof EmptyCaptureError) {
@@ -54,7 +61,9 @@ export function registerIpc(
   );
 
   ipcMain.handle("capture:undo", async (_event, id: string) => {
-    return service.undo(id);
+    const outcome = await service.undo(id);
+    onUndoableChange?.();
+    return outcome;
   });
 
   ipcMain.on("capture:notice-ack", (_event, id: string) => {
@@ -79,6 +88,7 @@ function registerSortIpc(
   sort: SortService,
   capture: CaptureService,
   hideSort?: () => void,
+  onUndoableChange?: () => void,
 ): void {
   ipcMain.on("sort:dismiss", () => hideSort?.());
 
@@ -109,6 +119,7 @@ function registerSortIpc(
       // (research R4b); expiring it turns a confusing refusal into no
       // affordance at all.
       capture.expireUndoWindow();
+      onUndoableChange?.();
     }
 
     return outcome;

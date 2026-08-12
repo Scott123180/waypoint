@@ -1,7 +1,15 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { whisperResourcesDir, whisperBinaryName } from "../src/main/resources";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  whisperResourcesDir,
+  whisperBinaryName,
+  trayIconFile,
+  trayIconIsTemplate,
+} from "../src/main/resources";
 
 describe("whisperResourcesDir", () => {
   test("uses the packaged resources path when packaged", () => {
@@ -33,5 +41,41 @@ describe("whisperBinaryName", () => {
 
   test("adds the exe suffix on windows", () => {
     assert.equal(whisperBinaryName("win32"), "whisper-cli.exe");
+  });
+});
+
+describe("tray icon selection", () => {
+  test("macOS gets the template image, which the menu bar recolours itself", () => {
+    // A template image is black-plus-alpha and macOS tints it to suit a light
+    // or dark menu bar, live. This is the whole light/dark story on darwin.
+    assert.equal(trayIconFile("darwin"), "trayTemplate.png");
+    assert.equal(trayIconIsTemplate("darwin"), true);
+  });
+
+  test("every other platform gets the light icon, not the template", () => {
+    // Nothing but macOS recolours a template, so shipping one elsewhere paints
+    // literal black on a panel that is almost always dark.
+    for (const platform of ["linux", "win32", "freebsd"]) {
+      assert.equal(trayIconFile(platform), "trayLight.png");
+      assert.equal(trayIconIsTemplate(platform), false);
+    }
+  });
+
+  test("both variants ship at both scales, with matching dimensions", () => {
+    // The light icon is the template recoloured, so the pair must stay the same
+    // size. Diverging dimensions mean one was replaced without the other.
+    // dist/tests → dist → packages/desktop, where build/ lives.
+    const dir = join(__dirname, "..", "..", "build");
+
+    const header = (name: string): { width: number; height: number } => {
+      const png = readFileSync(join(dir, name));
+      assert.equal(png.subarray(1, 4).toString(), "PNG", `${name} is not a PNG`);
+      return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+    };
+
+    assert.deepEqual(header("trayLight.png"), header("trayTemplate.png"));
+    assert.deepEqual(header("trayLight@2x.png"), header("trayTemplate@2x.png"));
+    assert.deepEqual(header("trayLight.png"), { width: 16, height: 16 });
+    assert.deepEqual(header("trayLight@2x.png"), { width: 32, height: 32 });
   });
 });

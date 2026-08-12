@@ -32,3 +32,26 @@ export function whisperBinaryName(platform: NodeJS.Platform | string): string {
 }
 
 export const WHISPER_MODEL_FILENAME = "ggml-small.en.bin";
+
+/**
+ * Which tray icon a platform gets, and whether it is a macOS template image.
+ *
+ * macOS is the only platform that answers "adapt to the bar behind you" for
+ * us: a *template* image is black pixels plus alpha, and the menu bar tints it
+ * to suit light or dark appearance, live, with no work here.
+ *
+ * Nowhere else can. The StatusNotifierItem protocol Linux trays speak has no
+ * way to ask what colour the panel is, and the desktop's light/dark preference
+ * is a different question with a different answer: every Yaru variant, the
+ * light ones included, paints the GNOME top bar #131313. Following
+ * `nativeTheme.shouldUseDarkColors` there would put a black icon on a black bar
+ * in light mode — worse than not trying. A light icon is simply the correct
+ * one, whatever the theme reports.
+ */
+export function trayIconFile(platform: NodeJS.Platform | string): string {
+  return platform === "darwin" ? "trayTemplate.png" : "trayLight.png";
+}
+
+export function trayIconIsTemplate(platform: NodeJS.Platform | string): boolean {
+  return platform === "darwin";
+}
