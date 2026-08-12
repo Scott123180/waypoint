@@ -55,3 +55,18 @@ export function trayIconFile(platform: NodeJS.Platform | string): string {
 export function trayIconIsTemplate(platform: NodeJS.Platform | string): boolean {
   return platform === "darwin";
 }
+
+/**
+ * Whether a left click on the tray icon already opens the context menu, given
+ * that one is attached.
+ *
+ * macOS does, and *also* emits `click` — so binding capture to that event there
+ * popped the capture box open behind the menu, next to the menu's own "Capture
+ * a thought" item. Windows does not: left click emits `click` and nothing else,
+ * so the icon needs that binding or it looks dead. Linux answers false for a
+ * third reason — its AppIndicator tray never emits `click` at all, only the
+ * menu — which makes the binding there harmless either way.
+ */
+export function trayClickOpensMenu(platform: NodeJS.Platform | string): boolean {
+  return platform === "darwin";
+}

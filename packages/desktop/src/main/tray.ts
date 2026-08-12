@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 
 import { createRefresher } from "./menu-state";
-import { trayIconFile, trayIconIsTemplate } from "./resources";
+import { trayClickOpensMenu, trayIconFile, trayIconIsTemplate } from "./resources";
 
 export interface TrayHandle {
   /** Re-reads `canUndo` and rebuilds the menu if the answer changed. */
@@ -56,7 +56,10 @@ export function createTray(actions: TrayActions): TrayHandle | undefined {
     refresh();
 
     tray.on("right-click", refresh);
-    tray.on("click", actions.onCapture);
+    // Only where a left click would otherwise do nothing. On macOS the click
+    // rides along with the menu the system is already opening, so capturing
+    // here meant every visit to the menu also threw a capture box on screen.
+    if (!trayClickOpensMenu(process.platform)) tray.on("click", actions.onCapture);
 
     return { refresh, destroy: () => tray.destroy() };
   } catch (err) {

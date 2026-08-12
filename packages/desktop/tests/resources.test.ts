@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   whisperResourcesDir,
   whisperBinaryName,
+  trayClickOpensMenu,
   trayIconFile,
   trayIconIsTemplate,
 } from "../src/main/resources";
@@ -58,6 +59,20 @@ describe("tray icon selection", () => {
     for (const platform of ["linux", "win32", "freebsd"]) {
       assert.equal(trayIconFile(platform), "trayLight.png");
       assert.equal(trayIconIsTemplate(platform), false);
+    }
+  });
+
+  test("macOS opens the menu on a left click, so the tray must not also capture", () => {
+    // darwin emits `click` *and* opens the attached context menu, which put a
+    // capture box on screen alongside the menu's own "Capture a thought".
+    assert.equal(trayClickOpensMenu("darwin"), true);
+  });
+
+  test("elsewhere a left click needs its own handler", () => {
+    // On win32 nothing happens without one; on linux the AppIndicator never
+    // emits `click`, so binding it changes nothing there.
+    for (const platform of ["linux", "win32", "freebsd"]) {
+      assert.equal(trayClickOpensMenu(platform), false);
     }
   });
 
