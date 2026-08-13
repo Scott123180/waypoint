@@ -279,5 +279,5 @@ verifier appears at any point. Every stored value traces to an explicit keystrok
 
 The weekly review ritual (Feature 5), the top-three / WIP limit (Feature 4), the retrospective date-range
 view (later — this feature only guarantees the dates it will read are present and parseable), the local
-HTTP API (Feature 6), and any AI-assisted structuring, including automatic conversion of an unprocessed
-item into a milestone (Feature 7, FR-046c).
+HTTP API (Feature 7), and any AI-assisted structuring, including automatic conversion of an unprocessed
+item into a milestone (Feature 8, FR-046c).

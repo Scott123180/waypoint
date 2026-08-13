@@ -18,6 +18,31 @@ export { VaultWriteError } from "./errors";
 export { parseInbox, isInboxEmpty } from "./inbox/parse";
 export type { ParsedItem } from "./inbox/parse";
 
+export { ProjectService, MILESTONE_CAP } from "./projects/project-service";
+export type { ProjectServiceDeps } from "./projects/project-service";
+export { AreaService } from "./projects/area-service";
+export type { AreaServiceDeps } from "./projects/area-service";
+export { structureGaps, needsStructure } from "./projects/gaps";
+export { parseProject, parseArea } from "./projects/document";
+export { parseMilestone, renderMilestone } from "./projects/milestone";
+export { PROJECT_STATUSES, AREA_STATUSES } from "./projects/types";
+export type {
+  Project,
+  ProjectStatus,
+  ProjectSummary,
+  ProjectOutcome,
+  ProjectField,
+  Milestone,
+  MilestoneRef,
+  Area,
+  AreaStatus,
+  AreaSummary,
+  AreaOutcome,
+  UnprocessedItem,
+  StructureGap,
+  RefusalReason,
+} from "./projects/types";
+
 export { SortService } from "./sort/sort-service";
 export type { SortServiceDeps } from "./sort/sort-service";
 export type {

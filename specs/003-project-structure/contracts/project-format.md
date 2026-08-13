@@ -172,7 +172,7 @@ drift, which is accepted (spec Assumptions).
 
 ## Reading completed work over a date range
 
-A retrospective view (post-Feature 8) answers "what got finished in March" by scanning `projects/*.md` for:
+The retrospective view (Feature 6) answers "what got finished in March" by scanning `projects/*.md` for:
 
 - `completed: YYYY-MM-DD` in the preamble — projects finished
 - `— done YYYY-MM-DD` on milestone lines — milestones finished

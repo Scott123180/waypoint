@@ -136,7 +136,210 @@ const sortApi = {
   },
 };
 
-contextBridge.exposeInMainWorld("waypoint", { ...api, sort: sortApi });
+/**
+ * Project and area channels. Pass-throughs only.
+ *
+ * The renderer cannot write a file, set a completion date, compute the
+ * structure flag, or decide which projects are active — those verbs simply do
+ * not exist here.
+ *
+ * See specs/003-project-structure/contracts/ipc-projects.md
+ */
+export type ProjectStatus = "active" | "parked" | "waiting" | "done";
+export type AreaStatus = "active" | "parked";
+export type StructureGap = "outcome" | "milestones" | "next-action";
+export type ProjectFieldName = "outcome" | "next-action" | "dri" | "title";
 
-export type WaypointApi = typeof api & { sort: typeof sortApi };
+export interface MilestoneRef {
+  index: number;
+  raw: string;
+}
+
+export interface MilestoneView {
+  index: number;
+  definitionOfDone: string;
+  verifier: string | null;
+  done: boolean;
+  completedOn: string | null;
+  raw: string;
+}
+
+export interface UnprocessedView {
+  text: string;
+  capturedAt: string | null;
+  index: number;
+  raw: string;
+}
+
+export interface ProjectView {
+  slug: string;
+  title: string;
+  status: ProjectStatus;
+  outcome: string | null;
+  nextAction: string | null;
+  dri: string | null;
+  milestones: MilestoneView[];
+  completedOn: string | null;
+  unprocessed: UnprocessedView[];
+}
+
+export interface ProjectSummaryView {
+  slug: string;
+  title: string;
+  status: ProjectStatus;
+  milestonesDone: number;
+  milestonesTotal: number;
+  gaps: StructureGap[];
+  completedOn: string | null;
+}
+
+export interface AreaView {
+  slug: string;
+  title: string;
+  status: AreaStatus;
+  rawStatus: string;
+  unprocessed: UnprocessedView[];
+}
+
+export type ProjectResponse =
+  | { ok: true; project: ProjectView }
+  | { ok: false; reason: string; message: string; open?: string[] };
+
+export type AreaResponse =
+  | { ok: true; area: AreaView }
+  | { ok: false; reason: string; message: string };
+
+const projectsApi = {
+  /** The active list, as the core defines it. The renderer does not filter. */
+  listActive(): Promise<ProjectSummaryView[]> {
+    return ipcRenderer.invoke("projects:list-active");
+  },
+
+  list(): Promise<ProjectSummaryView[]> {
+    return ipcRenderer.invoke("projects:list");
+  },
+
+  get(slug: string): Promise<ProjectView | null> {
+    return ipcRenderer.invoke("projects:get", slug);
+  },
+
+  create(title: string): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:create", title);
+  },
+
+  setField(
+    slug: string,
+    field: ProjectFieldName,
+    expected: string | null,
+    next: string | null,
+  ): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:set-field", slug, field, expected, next);
+  },
+
+  setStatus(slug: string, expected: ProjectStatus, next: ProjectStatus): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:set-status", slug, expected, next);
+  },
+
+  addMilestone(slug: string, definitionOfDone: string, verifier: string | null): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:add-milestone", slug, definitionOfDone, verifier);
+  },
+
+  editMilestone(
+    slug: string,
+    ref: MilestoneRef,
+    definitionOfDone: string,
+    verifier: string | null,
+  ): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:edit-milestone", slug, ref, definitionOfDone, verifier);
+  },
+
+  removeMilestone(slug: string, ref: MilestoneRef): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:remove-milestone", slug, ref);
+  },
+
+  completeMilestone(slug: string, ref: MilestoneRef): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:complete-milestone", slug, ref);
+  },
+
+  reopenMilestone(slug: string, ref: MilestoneRef): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:reopen-milestone", slug, ref);
+  },
+
+  /**
+   * Refuses with `open-milestones` unless confirmed. The renderer renders the
+   * refusal and calls again with the flag — it never decides when to ask.
+   */
+  complete(slug: string, opts?: { confirmOpenMilestones?: boolean }): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:complete", slug, opts);
+  },
+
+  reopen(slug: string, to: Exclude<ProjectStatus, "done">): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:reopen", slug, to);
+  },
+
+  dismissUnprocessed(slug: string, index: number, expectedRaw: string): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:dismiss-unprocessed", slug, index, expectedRaw);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("projects:dismiss");
+  },
+
+  /** The window was shown. Redraw everything. */
+  onRefresh(callback: () => void): void {
+    ipcRenderer.on("projects:refresh", () => callback());
+  },
+
+  /**
+   * A project or area file changed while this view was open.
+   *
+   * Named for the fact, never the cause — a writer added later needs no new
+   * channel. Separate from `inbox:changed`, which fires on every capture and is
+   * noise here.
+   */
+  onVaultChanged(callback: () => void): void {
+    ipcRenderer.on("vault:changed", () => callback());
+  },
+};
+
+const areasApi = {
+  list(): Promise<{ slug: string; title: string; status: AreaStatus; rawStatus: string }[]> {
+    return ipcRenderer.invoke("areas:list");
+  },
+
+  get(slug: string): Promise<AreaView | null> {
+    return ipcRenderer.invoke("areas:get", slug);
+  },
+
+  create(title: string): Promise<AreaResponse> {
+    return ipcRenderer.invoke("areas:create", title);
+  },
+
+  setTitle(slug: string, expected: string, next: string): Promise<AreaResponse> {
+    return ipcRenderer.invoke("areas:set-title", slug, expected, next);
+  },
+
+  setStatus(slug: string, expected: AreaStatus, next: AreaStatus): Promise<AreaResponse> {
+    return ipcRenderer.invoke("areas:set-status", slug, expected, next);
+  },
+
+  dismissUnprocessed(slug: string, index: number, expectedRaw: string): Promise<AreaResponse> {
+    return ipcRenderer.invoke("areas:dismiss-unprocessed", slug, index, expectedRaw);
+  },
+};
+
+contextBridge.exposeInMainWorld("waypoint", {
+  ...api,
+  sort: sortApi,
+  projects: projectsApi,
+  areas: areasApi,
+});
+
+export type WaypointApi = typeof api & {
+  sort: typeof sortApi;
+  projects: typeof projectsApi;
+  areas: typeof areasApi;
+};
 export type WaypointSortApi = typeof sortApi;
+export type WaypointProjectsApi = typeof projectsApi;
+export type WaypointAreasApi = typeof areasApi;

@@ -1,7 +1,13 @@
 import { app, globalShortcut } from "electron";
 import { join } from "node:path";
 
-import { CaptureService, SortService, type InboxWriteError } from "@waypoint/core";
+import {
+  AreaService,
+  CaptureService,
+  ProjectService,
+  SortService,
+  type InboxWriteError,
+} from "@waypoint/core";
 
 import { FsInboxStore } from "./adapters/fs-inbox-store";
 import { FsInboxDocument } from "./adapters/fs-inbox-document";
@@ -9,12 +15,14 @@ import { FsVaultStore } from "./adapters/fs-vault-store";
 import { FsSortJournal } from "./adapters/fs-sort-journal";
 import { InboxMutex } from "./inbox-mutex";
 import { InboxChanged } from "./inbox-changed";
+import { VaultChanged } from "./vault-changed";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
 import { SortWindow } from "./sort-window";
+import { ProjectsWindow } from "./projects-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
-import { registerIpc } from "./ipc";
+import { registerIpc, registerProjectsIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray, type TrayHandle } from "./tray";
 
@@ -80,22 +88,41 @@ function start(): void {
       }),
   });
 
+  // One vault store, shared by sort and by project structure: both write the
+  // same files, and a second instance would be a second set of assumptions
+  // about them.
+  const vaultStore = new FsVaultStore(config.vaultRoot);
+
   const sortService = new SortService({
     inbox: new FsInboxDocument(config.inboxPath, inboxMutex, raiseInboxChanged),
-    vault: new FsVaultStore(config.vaultRoot),
+    vault: vaultStore,
     journal: new FsSortJournal(sortJournalPath(env)),
   });
 
+  const projectService = new ProjectService({ vault: vaultStore });
+  const areaService = new AreaService({ vault: vaultStore });
+
   const sortWindow = new SortWindow();
   const showSort = (): void => sortWindow.show();
+
+  const projectsWindow = new ProjectsWindow();
+  const showProjects = (): void => projectsWindow.show();
 
   // The sort view is the only subscriber today. Later views subscribe here too
   // rather than each writer learning who is listening.
   inboxChanged.subscribe(() => sortWindow.inboxChanged());
 
+  // The counterpart for project and area files. Separate from the inbox signal
+  // because that one fires on every capture, which is noise here (research R7).
+  const vaultChanged = new VaultChanged();
+  vaultChanged.subscribe(() => projectsWindow.vaultChanged());
+
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
     tray?.refresh(),
+  );
+  registerProjectsIpc(projectService, areaService, () => projectsWindow.hide(), () =>
+    vaultChanged.raise(),
   );
 
   // Finish anything that was in flight when the process last stopped, before
@@ -141,6 +168,7 @@ function start(): void {
     onDictate: showCaptureDictating,
     onUndo: () => void undoLatest(),
     onSort: showSort,
+    onProjects: showProjects,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -181,6 +209,9 @@ function start(): void {
       showSort,
       hideSort: () => sortWindow.hide(),
       isSortVisible: () => sortWindow.isVisible(),
+      showProjects,
+      hideProjects: () => projectsWindow.hide(),
+      isProjectsVisible: () => projectsWindow.isVisible(),
       undoLatest,
       setStubTranscript: (text: string) => {
         stubTranscript.value = text;

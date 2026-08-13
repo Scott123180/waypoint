@@ -40,6 +40,12 @@ export interface Harness {
   openSort(): Promise<void>;
   isSortVisible(): Promise<boolean>;
   sortView(): Promise<Page>;
+  /** Opens the projects view, as the tray entry does. */
+  openProjects(): Promise<void>;
+  /** Hides it, as closing the window does. Reopening re-reads from disk. */
+  closeProjects(): Promise<void>;
+  isProjectsVisible(): Promise<boolean>;
+  projectsView(): Promise<Page>;
   close(): Promise<void>;
 }
 
@@ -217,6 +223,32 @@ export async function launch(
         if (page.url().includes("sort.html")) return page;
       }
       return app.waitForEvent("window", (p) => p.url().includes("sort.html"));
+    },
+    async openProjects() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showProjects();
+      });
+      const view = await harness.projectsView();
+      // The view renders from disk asynchronously on open; without this a first
+      // assertion can race the initial paint.
+      await view.waitForSelector("#sidebar");
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async closeProjects() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].hideProjects();
+      });
+    },
+    async isProjectsVisible() {
+      return app.evaluate(() => {
+        return (globalThis as Record<string, any>)["__waypoint"].isProjectsVisible();
+      });
+    },
+    async projectsView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("projects.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("projects.html"));
     },
     async close() {
       await app.close();

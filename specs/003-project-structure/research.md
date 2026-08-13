@@ -214,7 +214,7 @@ and a renderer.
 
 **Rationale**: The plan input asks for Feature 2's open-view behaviour, and this is it, including its
 limitation. `InboxChanged`'s doc comment states the design directly — the signal reports the fact, never the
-writer — so a future writer (the local API in Feature 6, the LLM layer in Feature 7) needs no new plumbing
+writer — so a future writer (the local API in Feature 7, the LLM layer in Feature 8) needs no new plumbing
 and no view needs to learn it exists.
 
 A separate emitter rather than reusing `InboxChanged` because the two fire on genuinely different events:
@@ -240,7 +240,7 @@ refusal so the client has nothing to compute.
 
 **Rationale**: FR-034a is a process rule, and Principle V says process rules live in the core where a
 client cannot skip them. Putting the confirmation in the renderer would make it a convention that the
-Feature 6 HTTP API and the Feature 7 LLM layer would each have to remember to reimplement — and the LLM
+Feature 7 HTTP API and the Feature 8 LLM layer would each have to remember to reimplement — and the LLM
 layer is exactly the caller that should not be able to close projects quietly.
 
 Returning the refusal as a value rather than throwing matches `SortOutcome`: a refusal here is an expected
@@ -287,7 +287,7 @@ so tests are deterministic.
 
 **Rationale**: Already the format in `waiting.md`, `calendar.md`, and `trash.md`, already local-time for the
 stated reason that a day boundary belongs to the user's day rather than UTC's, and already implemented and
-tested. A retrospective view (post-Feature 8) reads completed work over a date range by scanning
+tested. The retrospective view (Feature 6) reads completed work over a date range by scanning
 `projects/*.md` for these two fields — no index, nothing to fall out of sync, which is what SC-010 asks for.
 
 Date-level granularity, not timestamps: the spec asks what got finished in March, and a wall-clock date is

@@ -52,7 +52,7 @@ substituted date for a hand-written item, matching `sort:next`'s handling of the
 
 `vault:changed` is named for the fact, never the cause — the counterpart to Feature 2's `inbox:changed`. It
 says nothing about whether an outcome was edited, a milestone completed, or a status changed, so a future
-writer (Feature 6's API, Feature 7's LLM layer) needs no new channel and no view needs to learn it exists
+writer (Feature 6's API, Feature 8's LLM layer) needs no new channel and no view needs to learn it exists
 (research R7).
 
 It is a **separate** channel from `inbox:changed` rather than a reuse: `inbox:changed` fires on every

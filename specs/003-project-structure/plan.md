@@ -11,7 +11,7 @@ with a verifier, a next action, a DRI, a status — without ever forcing any of 
 week is a valid project; this feature fills it in, in pieces, whenever the user chooses.
 
 Everything lives in `@waypoint/core` behind `ProjectService` and `AreaService`, the verbs Feature 5's
-review, Feature 6's HTTP API, Feature 7's LLM layer, and the later retrospective view will call rather than
+review, Feature 7's HTTP API, Feature 8's LLM layer, and the later retrospective view will call rather than
 reimplement. The Electron client renders what those verbs return and sends back what the user typed.
 
 The hard part is not the logic — the rules are small — it is the **format**. Feature 2 already shipped stub
@@ -79,7 +79,7 @@ kilobytes. Whole files are read into memory, which stays comfortable far past an
 | IV | Durable Plain-Text Data | **PASS** | The whole feature is a markdown format, specified as a user-facing contract. Milestone state is a GFM checkbox a user edits by typing one character. Completion dates live in the project files themselves so a later retrospective needs no index that could desync. Reading never reformats — the git-diff test in [quickstart §2](quickstart.md) is the enforcement. |
 | V | Core Enforces Process | **PASS** (with a deliberate scope note, below) | The milestone cap and the open-milestone confirmation are core refusals, unbypassable by a client (research R8). The incomplete flag is computed by the core so Feature 5's review and the UI cannot disagree. Area statuses are constrained by the type system, not by convention. |
 | VI | Instant, Non-Blocking Capture | **PASS** (scoped) | This principle governs the capture surface, which this feature does not touch. Like sort, structure editing awaits the disk so an edit is durable before it is reported saved (FR-030). |
-| VII | One Consistent Interaction Model | **PASS** | Each verb is defined once. Feature 6 exposes them over HTTP and Feature 7 calls them with human-confirmed input; neither gets a second path to a completion date. Vocabulary — project, area, outcome, milestone, next action, DRI, verifier — comes from the ROADMAP and the spec, and the file format reuses `@name` and ` — ` from Feature 2's `waiting.md` so the user learns one convention. |
+| VII | One Consistent Interaction Model | **PASS** | Each verb is defined once. Feature 7 exposes them over HTTP and Feature 8 calls them with human-confirmed input; neither gets a second path to a completion date. Vocabulary — project, area, outcome, milestone, next action, DRI, verifier — comes from the ROADMAP and the spec, and the file format reuses `@name` and ` — ` from Feature 2's `waiting.md` so the user learns one convention. |
 
 **Post-Phase 1 re-check**: All seven still PASS. The design added no client-side domain logic, no network
 dependency, no non-plain-text user data, and — notably — no new port. **No violations — Complexity Tracking
@@ -211,10 +211,10 @@ Slice 1's byte-identical round-trip is the gate the rest of the feature rests on
 
 The weekly review ritual (Feature 5), the top-three / WIP limit (Feature 4), the retrospective date-range
 view (later — this feature guarantees only that the dates it will read are present and parseable), and the
-local HTTP/JSON API (Feature 6). `ProjectService` is designed as the verb surface that API will expose, but
+local HTTP/JSON API (Feature 7). `ProjectService` is designed as the verb surface that API will expose, but
 nothing here serves HTTP.
 
-Any AI-assisted structuring (Feature 7), including automatic conversion of an unprocessed item into a
+Any AI-assisted structuring (Feature 8), including automatic conversion of an unprocessed item into a
 milestone or next action (FR-046c) — this feature shows the items and lets the user clear them, and stops
 there. Nothing suggests, ranks, or pre-fills a value (FR-048).
 

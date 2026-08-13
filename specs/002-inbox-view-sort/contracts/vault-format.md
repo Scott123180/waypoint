@@ -25,6 +25,11 @@ is recognizable everywhere it lands.
 
 Created during sort as a minimal stub — title and status, nothing else (FR-009).
 
+> **Extended by Feature 3.** [specs/003-project-structure/contracts/project-format.md](../../003-project-structure/contracts/project-format.md)
+> describes what a project file looks like once outcome, milestones, next action, DRI, and completion dates
+> have been added. The stub below is **not superseded**: it remains a valid project forever, and Feature 3
+> extends these files in place rather than migrating them. Sort still writes exactly what is shown here.
+
 ```markdown
 # Roof repair
 

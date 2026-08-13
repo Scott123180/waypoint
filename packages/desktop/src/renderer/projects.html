@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Projects</title>
+    <style>
+      /*
+        The same five tokens the capture box and the sort view use, verbatim.
+        Three windows, one tool (Principle VII) — a third visual language would
+        say otherwise.
+      */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --border: #d8d8d8;
+        --error: #a4262c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --fg: #f2f2f2;
+          --muted: #9a9a9a;
+          --border: #3a3a3a;
+          --error: #ff9a9a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+        display: flex;
+        overflow: hidden;
+      }
+
+      /* ------------------------------------------------------------ list -- */
+      #sidebar {
+        flex: none;
+        width: 280px;
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        padding: 16px 0;
+      }
+      .section-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        padding: 12px 20px 6px;
+      }
+      .row {
+        padding: 8px 20px;
+        cursor: pointer;
+        border: none;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        width: 100%;
+        display: block;
+      }
+      .row:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+      .row[aria-current="true"] { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+      .row .name { display: flex; align-items: baseline; gap: 6px; }
+      .row .meta { font-size: 12px; color: var(--muted); }
+
+      /*
+        The flag is a dot and a word, not a colour alone: colour-blind users and
+        greyscale screenshots both have to be able to tell.
+      */
+      .needs-structure { color: var(--error); font-size: 12px; }
+      .needs-structure::before { content: "● "; }
+
+      /* ---------------------------------------------------------- detail -- */
+      #detail { flex: 1; overflow-y: auto; padding: 28px 32px; min-width: 0; }
+      #empty { color: var(--muted); }
+      h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+      h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 24px 0 8px;
+        font-weight: 600;
+      }
+      .unset { color: var(--muted); font-style: italic; }
+      .field { margin: 0 0 4px; white-space: pre-wrap; }
+      .row-inline { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+      input, textarea, select, button {
+        font: inherit;
+        color: inherit;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 8px;
+      }
+      textarea { width: 100%; min-height: 64px; resize: vertical; }
+      input { flex: 1; min-width: 0; }
+      button { cursor: pointer; }
+      button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+
+      .milestone { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; }
+      .milestone .dod { flex: 1; }
+      .milestone.done .dod { color: var(--muted); }
+      .milestone .when { font-size: 12px; color: var(--muted); }
+
+      .unprocessed-item {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        padding: 4px 0;
+        border-bottom: 1px dashed var(--border);
+      }
+      .unprocessed-item .text { flex: 1; white-space: pre-wrap; }
+      .unprocessed-item .when { font-size: 12px; color: var(--muted); }
+
+      .error { color: var(--error); min-height: 18px; font-size: 13px; }
+      #gaps-line { color: var(--error); font-size: 13px; min-height: 18px; }
+      #confirm { border: 1px solid var(--error); border-radius: 4px; padding: 12px; margin-top: 12px; }
+      #confirm ul { margin: 6px 0; padding-left: 20px; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <nav id="sidebar">
+      <div class="section-label">Projects</div>
+      <div id="project-list"></div>
+      <div class="section-label">Areas</div>
+      <div id="area-list"></div>
+    </nav>
+
+    <main id="detail">
+      <p id="empty">Select a project or an area.</p>
+
+      <section id="project-detail" hidden>
+        <h1 id="project-title"></h1>
+        <p id="gaps-line"></p>
+
+        <div class="row-inline">
+          <select id="status-select">
+            <option value="active">active</option>
+            <option value="parked">parked</option>
+            <option value="waiting">waiting</option>
+            <option value="done">done</option>
+          </select>
+          <span id="completed-on" class="meta"></span>
+        </div>
+
+        <div id="confirm" hidden>
+          <strong>Still open:</strong>
+          <ul id="confirm-list"></ul>
+          <button id="confirm-yes">Mark done anyway</button>
+          <button id="confirm-no">Cancel</button>
+        </div>
+
+        <h2>Outcome</h2>
+        <p id="project-outcome" class="field"></p>
+        <textarea id="outcome-input" placeholder="What does done actually mean?"></textarea>
+        <div class="row-inline"><button id="outcome-save">Save outcome</button></div>
+
+        <h2>Milestones <span id="milestone-progress" class="meta"></span></h2>
+        <div id="milestone-list"></div>
+        <div class="row-inline">
+          <input id="milestone-input" placeholder="Definition of done" />
+          <input id="verifier-input" placeholder="Verifier" />
+          <button id="milestone-add">Add</button>
+        </div>
+        <p id="milestone-error" class="error"></p>
+
+        <h2>Next action</h2>
+        <p id="project-next-action" class="field"></p>
+        <div class="row-inline">
+          <input id="next-action-input" placeholder="The single next step" />
+          <button id="next-action-save">Save</button>
+        </div>
+
+        <h2>DRI</h2>
+        <p id="project-dri" class="field"></p>
+        <div class="row-inline">
+          <input id="dri-input" placeholder="Who is accountable" />
+          <button id="dri-save">Save</button>
+        </div>
+
+        <h2 id="unprocessed-heading" hidden>Unprocessed</h2>
+        <div id="unprocessed-list"></div>
+
+        <p id="project-error" class="error"></p>
+      </section>
+
+      <section id="area-detail" hidden>
+        <h1 id="area-title"></h1>
+        <p class="meta">An ongoing responsibility — no outcome, no milestones, never finished.</p>
+
+        <div class="row-inline">
+          <select id="area-status-select">
+            <option value="active">active</option>
+            <option value="parked">parked</option>
+          </select>
+          <span id="area-raw-status" class="meta"></span>
+        </div>
+
+        <h2 id="area-unprocessed-heading" hidden>Unprocessed</h2>
+        <div id="area-unprocessed-list"></div>
+
+        <p id="area-error" class="error"></p>
+      </section>
+    </main>
+
+    <script src="projects.js"></script>
+  </body>
+</html>

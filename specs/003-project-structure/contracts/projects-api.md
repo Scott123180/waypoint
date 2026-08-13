@@ -104,7 +104,7 @@ interface ProjectSummary {
 
    The rule lives here rather than in a client filter because "which projects are active" is a business
    rule, and Principle II puts business rules in the core. A renderer that filtered on `status` itself
-   would be holding that rule, and Feature 6's HTTP API would have to reimplement it to agree.
+   would be holding that rule, and Feature 7's HTTP API would have to reimplement it to agree.
 
 3. **`gaps` is computed, never stored.** Derived from the returned fields themselves, so it cannot disagree
    with them (FR-018, FR-020, research R5).

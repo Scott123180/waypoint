@@ -46,10 +46,11 @@ Plain-text, git-tracked, stored **outside** the application repo:
 - [x] **Feature 2 — Inbox view + sort** (walk inbox items one at a time,
       route to project / area / waiting-for / trash / calendar, empties
       inbox to zero)
-- [ ] **Feature 3 — Projects with milestones** (outcome, 2–4 milestones,
+- [x] **Feature 3 — Projects with milestones** (outcome, 2–4 milestones,
       next action, DRI, status; definition of done includes who verifies).
-      Also owns draining `## Unprocessed` — turning the raw items Feature 2
-      dropped into a project into actual structure
+      Drains `## Unprocessed` by showing the items beside the fields and
+      letting each be dismissed once handled — automatic conversion into a
+      milestone or next action stays with Feature 7
 - [ ] **Feature 4 — Top-three / WIP limit** (1–3 outcomes per week; refuses
       a 4th active project until one is done or explicitly dropped)
 - [ ] **Feature 5 — Weekly review ritual** (scripted: inbox must be zero,
@@ -127,6 +128,21 @@ spec because each one is a fix to something that already exists.
   captured one (no timestamp, and none invented). Inbox zero means the file
   is genuinely clear, not just clear of app-written lines — which matters
   because Feature 5 gates on it.
+- **Project structure extends the stub, never migrates it** — Feature 2 had
+  already shipped title-and-status files into vaults, so Feature 3 adds
+  preamble fields beside `status:` and `## Outcome` / `## Milestones` above
+  `## Unprocessed`. YAML frontmatter was rejected for exactly this reason: it
+  would have meant rewriting every file already on disk.
+- **The incomplete flag is computed, never stored** — a stored flag would be a
+  second copy of what the fields already say, and would go stale the first time
+  the user edited the file in vim, which is the scenario the plain-text format
+  exists to support.
+- **Marking a project done with open milestones asks rather than refuses** — a
+  hard refusal would be routed around by deleting the milestone, destroying its
+  record. The confirmation is the honest version of the same guardrail.
+- **The milestone cap is enforced, the floor is not** — a fifth milestone is
+  refused (four is the scope-creep guard); a single milestone is just a project
+  mid-typing and is never flagged for it.
 - **Sort verifies before it writes** — the inbox may be open in an editor at
   the same time, so a decision re-checks the item still matches disk and
   refuses on mismatch, mirroring capture's undo tail verification. Refusing
