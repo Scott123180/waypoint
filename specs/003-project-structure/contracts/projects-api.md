@@ -3,8 +3,8 @@
 **Package**: `@waypoint/core` | **Feature**: 003-project-structure
 
 The complete surface the core exposes for project and area structure. Every rule in the feature spec is
-enforced behind this boundary. The Electron GUI now, the local HTTP API in Feature 6, the LLM-assisted
-layer in Feature 7, the weekly review in Feature 5, and the retrospective view later all call exactly these
+enforced behind this boundary. The Electron GUI now, the local HTTP API in Feature 7, the LLM-assisted
+layer in Feature 8, the weekly review in Feature 5, and the retrospective view later all call exactly these
 verbs and get identical behaviour (Principles II and VII).
 
 The core imports nothing from Electron and touches no platform globals.
@@ -58,6 +58,7 @@ class ProjectService {
   // Reading — every call re-reads from disk, nothing is cached
   list(): Promise<ProjectSummary[]>;
   listActive(): Promise<ProjectSummary[]>;
+  listCompleted(): Promise<ProjectSummary[]>;
   get(slug: string): Promise<Project | null>;
   create(title: string): Promise<ProjectOutcome>;
 
@@ -98,13 +99,16 @@ interface ProjectSummary {
    (FR-020, FR-045).
 
 2. **Which projects are in the active list is decided by the core.** `listActive()` returns exactly the
-   projects a client should show as active — every project whose status is not `done` (FR-032). `list()`
-   returns *every* project, done ones included, for callers that genuinely need the whole set: Feature 5's
-   review and the later retrospective.
+   projects a client should show as active — every project whose status is not `done` (FR-032).
+   `listCompleted()` is its exact complement, and `list()` returns *every* project for callers that need
+   the whole set: Feature 5's review and the later retrospective.
 
    The rule lives here rather than in a client filter because "which projects are active" is a business
    rule, and Principle II puts business rules in the core. A renderer that filtered on `status` itself
    would be holding that rule, and Feature 7's HTTP API would have to reimplement it to agree.
+
+   `listCompleted()` exists for a second reason: without it a finished project is unreachable in any
+   client, and `reopen()` becomes a verb with no way to call it (FR-029, SC-012).
 
 3. **`gaps` is computed, never stored.** Derived from the returned fields themselves, so it cannot disagree
    with them (FR-018, FR-020, research R5).

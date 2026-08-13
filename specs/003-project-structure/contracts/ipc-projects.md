@@ -17,8 +17,9 @@ path. The client cannot hold domain logic it has no way to express.
 | Channel | Args | Returns |
 |---|---|---|
 | `projects:list-active` | — | `ProjectSummary[]` — the active list, decided by the core |
+| `projects:list-completed` | — | `ProjectSummary[]` — finished projects, likewise decided by the core |
 | `projects:list` | — | `ProjectSummary[]` — every project, done included |
-| `projects:get` | `slug` | `Project \| null` |
+| `projects:get` | `slug` | `Project & { gaps }` \| `null` — the gaps travel with the project |
 | `projects:create` | `title` | `ProjectOutcome` |
 | `projects:set-field` | `slug`, `field`, `expected`, `next` | `ProjectOutcome` |
 | `projects:add-milestone` | `slug`, `definitionOfDone`, `verifier` | `ProjectOutcome` |
@@ -69,7 +70,10 @@ currently typing into a field.
 
 Reads what it is given, sends back what the user typed. Specifically it does **not**:
 
-- decide whether a project is incomplete — it renders `gaps` (FR-020)
+- decide whether a project is incomplete — it renders the `gaps` that arrive with the project. They are
+  attached by the core's own `structureGaps`, not looked up from a list, because status must have no
+  effect on the flag: sourcing them from the *active* list would report every finished project as fully
+  structured (FR-020, FR-021)
 - count milestone progress — it renders `milestonesDone` / `milestonesTotal` (FR-017)
 - decide or filter which projects belong in the active list — it calls `projects:list-active` and renders
   what comes back (FR-032). Filtering on `status` in the renderer would put the rule in the client.

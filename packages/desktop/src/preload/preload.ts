@@ -181,6 +181,11 @@ export interface ProjectView {
   milestones: MilestoneView[];
   completedOn: string | null;
   unprocessed: UnprocessedView[];
+  /** Derived by the core and sent with the project, so status cannot affect it. */
+  gaps: StructureGap[];
+  /** Reported by the core; the view renders these rather than counting (FR-017). */
+  milestonesDone: number;
+  milestonesTotal: number;
 }
 
 export interface ProjectSummaryView {
@@ -213,6 +218,11 @@ const projectsApi = {
   /** The active list, as the core defines it. The renderer does not filter. */
   listActive(): Promise<ProjectSummaryView[]> {
     return ipcRenderer.invoke("projects:list-active");
+  },
+
+  /** Finished projects, likewise decided by the core. */
+  listCompleted(): Promise<ProjectSummaryView[]> {
+    return ipcRenderer.invoke("projects:list-completed");
   },
 
   list(): Promise<ProjectSummaryView[]> {

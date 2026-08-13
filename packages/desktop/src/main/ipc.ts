@@ -3,10 +3,12 @@ import { ipcMain } from "electron";
 import {
   CaptureService,
   EmptyCaptureError,
+  structureGaps,
   type AreaService,
   type AreaStatus,
   type ItemRef,
   type MilestoneRef,
+  type Project,
   type ProjectService,
   type ProjectStatus,
   type SortDecision,
@@ -159,9 +161,10 @@ export function registerProjectsIpc(
     return outcome;
   };
 
-  // The core decides which projects are active (FR-032); the renderer renders
-  // what it is handed.
+  // The core decides which projects are active and which are finished
+  // (FR-032); the renderer renders what it is handed.
   ipcMain.handle("projects:list-active", async () => projects.listActive());
+  ipcMain.handle("projects:list-completed", async () => projects.listCompleted());
   ipcMain.handle("projects:list", async () => projects.list());
 
   ipcMain.handle("projects:get", async (_event, slug: string) => {
@@ -273,8 +276,21 @@ function serializeItem(item: { capturedAt: Date | null }): unknown {
   return { ...item, capturedAt: item.capturedAt ? item.capturedAt.toISOString() : null };
 }
 
-function serializeProject(project: {
-  unprocessed: { capturedAt: Date | null }[];
-}): unknown {
-  return { ...project, unprocessed: project.unprocessed.map(serializeItem) };
+/**
+ * A project, plus the gaps the core derives for it.
+ *
+ * The gaps travel with the project rather than being looked up from a list,
+ * because status must have no effect on the flag (FR-021) — sourcing them from
+ * the *active* list would silently report a done project as fully structured.
+ * `structureGaps` is the core's own function, so nothing is computed here.
+ */
+function serializeProject(project: Project): unknown {
+  return {
+    ...project,
+    gaps: structureGaps(project),
+    // Progress is reported by the core, not counted by the view (FR-017).
+    milestonesDone: project.milestones.filter((m) => m.done).length,
+    milestonesTotal: project.milestones.length,
+    unprocessed: project.unprocessed.map(serializeItem),
+  };
 }

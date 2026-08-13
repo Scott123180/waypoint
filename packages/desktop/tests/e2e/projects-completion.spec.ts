@@ -98,23 +98,75 @@ test("confirming completes the project and leaves the open milestones open", asy
   expect(file).not.toMatch(/- \[ \].*done \d{4}/);
 });
 
-test("a completed project leaves the active list, and reopening brings it back", async () => {
+test("a completed project moves to Done, and can be reopened from there", async () => {
   const view = await openRoof();
   await view.selectOption("#status-select", "done");
   await view.click("#confirm-yes");
 
-  await expect(view.locator('[data-project="roof-repair"]')).toHaveCount(0);
+  // Out of the active list, but still reachable — otherwise reopening would be
+  // a verb with no way to call it (FR-029, SC-012).
+  await expect(view.locator('#project-list [data-project="roof-repair"]')).toHaveCount(0);
+  await expect(view.locator('#done-list [data-project="roof-repair"]')).toHaveCount(1);
+  await expect(view.locator('#done-list [data-project="roof-repair"]')).toContainText("completed");
 
-  // Reopen by hand-editing the file, then reopening the view: the list is
-  // derived from disk, so this is the honest way to prove it.
-  h.writeVaultFile(
-    "projects/roof-repair.md",
-    h.vaultFile("projects/roof-repair.md").replace("status: done", "status: active"),
-  );
-  await h.closeProjects();
+  await view.click('#done-list [data-project="roof-repair"]');
+  await view.selectOption("#status-select", "active");
+
+  await expect(view.locator('#project-list [data-project="roof-repair"]')).toHaveCount(1);
+  await expect(view.locator('#done-list [data-project="roof-repair"]')).toHaveCount(0);
+  await expect.poll(() => h.vaultFile("projects/roof-repair.md")).not.toContain("completed:");
+});
+
+test("a done project still reports what structure it is missing", async () => {
+  // Status has no effect on the flag (FR-021). Sourcing gaps from the active
+  // list would silently report every finished project as fully structured.
+  h.writeVaultFile("projects/bare.md", "# Bare\n\nstatus: done\ncompleted: 2026-03-01\n");
   await h.openProjects();
+  const view = await h.projectsView();
 
-  await expect(view.locator('[data-project="roof-repair"]')).toHaveCount(1);
+  await view.click('#done-list [data-project="bare"]');
+  await expect(view.locator("#gaps-line")).toContainText("outcome");
+  await expect(view.locator("#gaps-line")).toContainText("next action");
+});
+
+test("a milestone's definition of done and verifier can be edited in place", async () => {
+  const view = await openRoof();
+
+  await view.locator(".milestone").first().locator(".edit").click();
+  await view.locator(".milestone").first().locator(".edit-dod").fill("Estimate approved in writing");
+  await view.locator(".milestone").first().locator(".edit-verifier").fill("Sam");
+  await view.locator(".milestone").first().locator(".edit-save").click();
+
+  await expect(view.locator(".milestone").first()).toContainText("Estimate approved in writing");
+  await expect(view.locator(".milestone").first()).toContainText("@Sam");
+  // Order is stable — editing must not move the milestone (FR-015).
+  await expect(view.locator(".milestone")).toHaveCount(4);
+  await expect(view.locator(".milestone").nth(1)).toContainText("Materials on site");
+});
+
+test("editing a completed milestone keeps its completion date", async () => {
+  const view = await openRoof();
+  await view.locator(".milestone input[type=checkbox]").first().check();
+  await expect(view.locator(".milestone").first()).toContainText(/done \d{4}/);
+
+  await view.locator(".milestone").first().locator(".edit").click();
+  await view.locator(".milestone").first().locator(".edit-dod").fill("Reworded after the fact");
+  await view.locator(".milestone").first().locator(".edit-save").click();
+
+  await expect(view.locator(".milestone").first()).toContainText("Reworded after the fact");
+  await expect(view.locator(".milestone").first()).toContainText(/done \d{4}/);
+});
+
+test("cancelling a milestone edit changes nothing", async () => {
+  const view = await openRoof();
+  const before = h.vaultFile("projects/roof-repair.md");
+
+  await view.locator(".milestone").first().locator(".edit").click();
+  await view.locator(".milestone").first().locator(".edit-dod").fill("Never saved");
+  await view.locator(".milestone").first().locator(".edit-cancel").click();
+
+  await expect(view.locator(".milestone").first()).toContainText("Estimate approved");
+  expect(h.vaultFile("projects/roof-repair.md")).toBe(before);
 });
 
 test("a project whose milestones are all done completes with no confirmation", async () => {
@@ -130,12 +182,11 @@ test("a project whose milestones are all done completes with no confirmation", a
   await expect.poll(() => h.vaultFile("projects/roof-repair.md")).toContain("status: done");
 });
 
-test("editing a completed milestone keeps its date", async () => {
+test("an unrelated field edit keeps every completion date", async () => {
   const view = await openRoof();
   await view.locator(".milestone input[type=checkbox]").first().check();
   await expect(view.locator(".milestone").first()).toContainText(/done \d{4}/);
 
-  // Any unrelated edit: the date must survive it.
   await view.fill("#dri-input", "Alex");
   await view.click("#dri-save");
 

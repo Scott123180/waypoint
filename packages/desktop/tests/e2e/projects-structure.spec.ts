@@ -38,7 +38,7 @@ test("a bare stub opens with every field visibly unset and nothing demanded", as
 
   // The flag names what is missing, rather than only that something is
   // (FR-022).
-  const gaps = view.locator("#project-gaps");
+  const gaps = view.locator("#gaps-line");
   await expect(gaps).toContainText("outcome");
   await expect(gaps).toContainText("milestones");
   await expect(gaps).toContainText("next action");
@@ -81,10 +81,12 @@ test("structure added across separate visits all persists", async () => {
   await view.fill("#dri-input", "me");
   await view.click("#dri-save");
 
+  // Each of these is polled: `click()` returns when the event is dispatched,
+  // not when the write it triggers has landed, so reading the file straight
+  // after the last click races the app rather than testing it.
   await expect.poll(() => h.vaultFile("projects/roof-repair.md")).toContain("No more leak.");
-  const file = h.vaultFile("projects/roof-repair.md");
-  expect(file).toContain("next action: Call the roofer");
-  expect(file).toContain("dri: me");
+  await expect.poll(() => h.vaultFile("projects/roof-repair.md")).toContain("next action: Call the roofer");
+  await expect.poll(() => h.vaultFile("projects/roof-repair.md")).toContain("dri: me");
 });
 
 test("a single milestone is accepted and not warned about", async () => {
@@ -98,7 +100,7 @@ test("a single milestone is accepted and not warned about", async () => {
   await view.click("#milestone-add");
 
   await expect(view.locator(".milestone")).toHaveCount(1);
-  await expect(view.locator("#project-gaps")).not.toContainText("milestones");
+  await expect(view.locator("#gaps-line")).not.toContainText("milestones");
   await expect(view.locator("#milestone-error")).toBeEmpty();
 });
 
@@ -152,4 +154,25 @@ test("dismissing a handled item removes it and keeps it findable in trash", asyn
 
   await expect.poll(() => h.vaultFile("trash.md")).toContain("Call the roofer back");
   expect(h.vaultFile("trash.md")).toContain("2026-08-11T09:14:02-04:00");
+});
+
+test("a project can be renamed, and an empty title is refused", async () => {
+  h.writeVaultFile("projects/roof-repair.md", STUB);
+  await h.openProjects();
+  const view = await h.projectsView();
+  await view.click('[data-project="roof-repair"]');
+
+  await view.fill("#title-input", "Roof repair (phase two)");
+  await view.click("#title-save");
+  await expect(view.locator("#project-title")).toHaveText("Roof repair (phase two)");
+  await expect.poll(() => h.vaultFile("projects/roof-repair.md")).toContain("# Roof repair (phase two)");
+
+  // The slug is the identity, so renaming must not move the file.
+  expect(h.vaultFile("projects/roof-repair.md")).not.toBe("");
+
+  // A title is one of the two fields always present (FR-003).
+  await view.fill("#title-input", "   ");
+  await view.click("#title-save");
+  await expect(view.locator("#project-error")).toContainText(/title/i);
+  expect(h.vaultFile("projects/roof-repair.md")).toContain("# Roof repair (phase two)");
 });

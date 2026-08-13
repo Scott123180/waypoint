@@ -58,6 +58,11 @@ interface ProjectView {
   milestones: MilestoneView[];
   completedOn: string | null;
   unprocessed: UnprocessedView[];
+  /** Derived by the core and sent with the project, so status cannot affect it. */
+  gaps: StructureGap[];
+  /** Reported by the core; the view renders these rather than counting (FR-017). */
+  milestonesDone: number;
+  milestonesTotal: number;
 }
 
 interface ProjectSummaryView {
@@ -86,6 +91,7 @@ type AreaResponse = { ok: true; area: AreaView } | { ok: false; reason: string; 
 
 interface ProjectsApi {
   listActive(): Promise<ProjectSummaryView[]>;
+  listCompleted(): Promise<ProjectSummaryView[]>;
   list(): Promise<ProjectSummaryView[]>;
   get(slug: string): Promise<ProjectView | null>;
   create(title: string): Promise<ProjectResponse>;
@@ -142,11 +148,12 @@ const GAP_LABELS: Record<StructureGap, string> = {
 
 // ---------------------------------------------------------------------- list
 
-async function renderList(): Promise<void> {
-  // The core decides membership; this asks for the active list rather than
-  // fetching everything and filtering on status itself (FR-032).
-  const [projects, areas] = await Promise.all([wp.projects.listActive(), wp.areas.list()]);
-
+/** Paints the sidebar from lists the core already decided the membership of. */
+function paintList(
+  projects: ProjectSummaryView[],
+  areas: { slug: string; title: string }[],
+  done: ProjectSummaryView[],
+): void {
   const projectList = $("project-list");
   projectList.replaceChildren(
     ...projects.map((p) => projectRow(p)),
@@ -157,6 +164,15 @@ async function renderList(): Promise<void> {
   areaList.replaceChildren(
     ...areas.map((a) => areaRow(a.slug, a.title)),
     ...(areas.length === 0 ? [note("No areas.")] : []),
+  );
+
+  // Finished projects stay reachable, which is what makes reopening possible
+  // at all — and what lets the user look at what they actually got done
+  // (FR-029, SC-012).
+  const doneList = $("done-list");
+  doneList.replaceChildren(
+    ...done.map((p) => projectRow(p)),
+    ...(done.length === 0 ? [note("Nothing finished yet.")] : []),
   );
 }
 
@@ -184,11 +200,13 @@ function projectRow(p: ProjectSummaryView): HTMLElement {
 
   const meta = document.createElement("div");
   meta.className = "meta";
-  // Progress comes from the core; this concatenates, it does not count.
-  meta.textContent =
-    p.milestonesTotal > 0
-      ? `${p.status} · ${p.milestonesDone} of ${p.milestonesTotal} done`
-      : p.status;
+  // Progress and the completion date both come from the core; this
+  // concatenates, it does not count.
+  const progress =
+    p.milestonesTotal > 0 ? `${p.milestonesDone} of ${p.milestonesTotal} done` : "";
+  meta.textContent = [p.completedOn ? `completed ${p.completedOn}` : p.status, progress]
+    .filter(Boolean)
+    .join(" · ");
   row.append(meta);
 
   if (p.gaps.length > 0) {
@@ -223,36 +241,56 @@ function areaRow(slug: string, title: string): HTMLElement {
 
 async function select(next: Chosen): Promise<void> {
   selection = next;
-  await Promise.all([renderList(), renderDetail()]);
+  await refreshAll();
 }
 
-async function renderDetail(): Promise<void> {
+/** Paints whichever of the two detail panes the selection calls for. */
+function paintDetail(project: ProjectView | null, area: AreaView | null): void {
   $("empty").hidden = selection !== null;
   $("project-detail").hidden = selection?.kind !== "project";
   $("area-detail").hidden = selection?.kind !== "area";
 
-  if (selection?.kind === "project") await renderProject(selection.slug);
-  if (selection?.kind === "area") await renderArea(selection.slug);
-}
-
-async function renderProject(slug: string): Promise<void> {
-  const project = await wp.projects.get(slug);
-  current = project;
-  if (!project) {
-    selection = null;
-    await renderList();
-    return;
+  if (selection?.kind === "project") {
+    if (!project) {
+      // Deleted underneath us; fall back to the empty state rather than
+      // rendering a project that is no longer there.
+      selection = null;
+      $("project-detail").hidden = true;
+      $("empty").hidden = false;
+      return;
+    }
+    paintProject(project);
   }
 
+  if (selection?.kind === "area") {
+    if (!area) {
+      selection = null;
+      $("area-detail").hidden = true;
+      $("empty").hidden = false;
+      return;
+    }
+    paintArea(area);
+  }
+}
+
+function paintProject(project: ProjectView): void {
+  current = project;
+
   $("project-title").textContent = project.title;
+  const titleInput = $("title-input") as HTMLInputElement;
+  if (titleInput.value === (titleInput.dataset["painted"] ?? "")) titleInput.value = project.title;
+  titleInput.dataset["painted"] = project.title;
   ($("status-select") as HTMLSelectElement).value = project.status;
   $("completed-on").textContent = project.completedOn ? `completed ${project.completedOn}` : "";
 
   // The gaps are named rather than merely counted, so the user knows what to
-  // supply without opening a checklist (FR-022).
-  const gaps = summaryFor(project);
+  // supply without opening a checklist (FR-022). They come from the project
+  // itself — sourcing them from the *active* list would report a done project
+  // as fully structured, and status must have no effect on the flag (FR-021).
   $("gaps-line").textContent =
-    gaps.length > 0 ? `Needs structure: ${gaps.map((g) => GAP_LABELS[g]).join(", ")}` : "";
+    project.gaps.length > 0
+      ? `Needs structure: ${project.gaps.map((g) => GAP_LABELS[g]).join(", ")}`
+      : "";
 
   setField("project-outcome", "outcome-input", project.outcome);
   setField("project-next-action", "next-action-input", project.nextAction);
@@ -267,29 +305,37 @@ async function renderProject(slug: string): Promise<void> {
 }
 
 /**
- * The gaps for the open project.
+ * An unset field is shown as unset, never hidden (FR-026).
  *
- * Read from the list the core computed rather than derived here — the client
- * must not own the definition of "incomplete" (FR-020).
+ * The input half is only overwritten when the user has *not* touched it. A
+ * refresh can land at any moment — every write raises `vault:changed`, and the
+ * user is usually already typing into the next field by then — so blindly
+ * assigning `value` here would delete half-typed text a keystroke before they
+ * saved it.
+ *
+ * "Untouched" means the value still equals what was last painted into it,
+ * which is tracked on the element itself rather than in a parallel map that
+ * could fall out of step with the DOM.
  */
-let gapsBySlug = new Map<string, StructureGap[]>();
-
-function summaryFor(project: ProjectView): StructureGap[] {
-  return gapsBySlug.get(project.slug) ?? [];
-}
-
-/** An unset field is shown as unset, never hidden (FR-026). */
 function setField(displayId: string, inputId: string, value: string | null): void {
   const display = $(displayId);
   display.textContent = value ?? "not yet set";
   display.classList.toggle("unset", value === null);
-  ($(inputId) as HTMLInputElement | HTMLTextAreaElement).value = value ?? "";
+
+  const input = $(inputId) as HTMLInputElement | HTMLTextAreaElement;
+  const next = value ?? "";
+  const untouched = input.value === (input.dataset["painted"] ?? "");
+
+  if (untouched) input.value = next;
+  input.dataset["painted"] = next;
 }
 
 function renderMilestones(project: ProjectView): void {
-  const done = project.milestones.filter((m) => m.done).length;
-  const total = project.milestones.length;
-  $("milestone-progress").textContent = total > 0 ? `${done} of ${total} done` : "";
+  // Both numbers come from the core; this renders them (FR-017).
+  $("milestone-progress").textContent =
+    project.milestonesTotal > 0
+      ? `${project.milestonesDone} of ${project.milestonesTotal} done`
+      : "";
 
   $("milestone-list").replaceChildren(
     ...project.milestones.map((m) => {
@@ -322,6 +368,15 @@ function renderMilestones(project: ProjectView): void {
         .filter(Boolean)
         .join(" · ");
 
+      const edit = document.createElement("button");
+      edit.textContent = "Edit";
+      edit.className = "edit";
+      // Editing swaps the row for inputs in place, so the milestone keeps its
+      // position while it is being reworded (FR-015, FR-016).
+      edit.addEventListener("click", () => {
+        row.replaceChildren(...editorFor(project.slug, m, ref, row));
+      });
+
       const remove = document.createElement("button");
       remove.textContent = "Remove";
       remove.className = "remove";
@@ -329,10 +384,61 @@ function renderMilestones(project: ProjectView): void {
         void run(wp.projects.removeMilestone(project.slug, ref), "milestone-error");
       });
 
-      row.append(box, text, meta, remove);
+      row.append(box, text, meta, edit, remove);
       return row;
     }),
   );
+}
+
+/**
+ * The in-place editor for one milestone.
+ *
+ * Sends the `MilestoneRef` the row was rendered from, so a milestone reworded
+ * in a text editor since then is refused rather than overwritten (FR-045d).
+ * A completed milestone keeps its date through an edit — that rule lives in the
+ * core, and nothing here needs to know it (FR-037).
+ */
+function editorFor(
+  slug: string,
+  milestone: MilestoneView,
+  ref: MilestoneRef,
+  row: HTMLElement,
+): HTMLElement[] {
+  const dod = document.createElement("input");
+  dod.className = "edit-dod";
+  dod.value = milestone.definitionOfDone;
+  dod.setAttribute("aria-label", "Definition of done");
+
+  const verifier = document.createElement("input");
+  verifier.className = "edit-verifier";
+  verifier.value = milestone.verifier ?? "";
+  verifier.placeholder = "Verifier";
+  verifier.setAttribute("aria-label", "Verifier");
+
+  const save = document.createElement("button");
+  save.className = "edit-save";
+  save.textContent = "Save";
+  save.addEventListener("click", () => {
+    const name = verifier.value.trim();
+    void run(
+      wp.projects.editMilestone(slug, ref, dod.value, name === "" ? null : name),
+      "milestone-error",
+    );
+  });
+
+  const cancel = document.createElement("button");
+  cancel.className = "edit-cancel";
+  cancel.textContent = "Cancel";
+  // Cancelling changes nothing at all, so a plain redraw is the whole of it.
+  cancel.addEventListener("click", () => void refreshAll());
+
+  dod.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") save.click();
+    if (event.key === "Escape") cancel.click();
+  });
+
+  void row;
+  return [dod, verifier, save, cancel];
 }
 
 function renderUnprocessed(project: ProjectView): void {
@@ -369,14 +475,8 @@ function renderUnprocessed(project: ProjectView): void {
   );
 }
 
-async function renderArea(slug: string): Promise<void> {
-  const area = await wp.areas.get(slug);
+function paintArea(area: AreaView): void {
   currentArea = area;
-  if (!area) {
-    selection = null;
-    await renderList();
-    return;
-  }
 
   $("area-title").textContent = area.title;
   ($("area-status-select") as HTMLSelectElement).value = area.status;
@@ -422,26 +522,52 @@ async function renderArea(slug: string): Promise<void> {
  */
 async function run(call: Promise<ProjectResponse>, errorId: string): Promise<boolean> {
   const outcome = await call;
+
+  // Refresh *before* showing the message, never after: redrawing the project
+  // clears the error slots, so setting the text first would wipe every refusal
+  // the instant it was written — the milestone cap, the stale-write warning,
+  // the empty-title refusal, all invisible.
+  await refreshAll();
+
   if (!outcome.ok) {
     $(errorId).textContent = outcome.message;
-    // A refusal usually means the file moved underneath us, so re-read.
-    await refreshAll();
     return false;
   }
-  await refreshAll();
   return true;
 }
 
 async function runArea(call: Promise<{ ok: boolean; message?: string }>): Promise<void> {
   const outcome = await call;
-  if (!outcome.ok) $("area-error").textContent = outcome.message ?? "";
   await refreshAll();
+  if (!outcome.ok) $("area-error").textContent = outcome.message ?? "";
 }
 
+/**
+ * Redraw everything from disk.
+ *
+ * Guarded by a generation counter because two refreshes race on every write:
+ * one from the verb that just returned, one from the `vault:changed` signal the
+ * same write raised. Both read asynchronously, so without this the older one
+ * can resolve last and paint stale rows — a flag that will not clear, or
+ * progress that lags a click behind.
+ */
+let generation = 0;
+
 async function refreshAll(): Promise<void> {
-  const summaries = await wp.projects.listActive();
-  gapsBySlug = new Map(summaries.map((s) => [s.slug, s.gaps]));
-  await Promise.all([renderList(), renderDetail()]);
+  const mine = ++generation;
+  const [projects, areas, done, project, area] = await Promise.all([
+    wp.projects.listActive(),
+    wp.areas.list(),
+    wp.projects.listCompleted(),
+    selection?.kind === "project" ? wp.projects.get(selection.slug) : Promise.resolve(null),
+    selection?.kind === "area" ? wp.areas.get(selection.slug) : Promise.resolve(null),
+  ]);
+
+  // A newer refresh started while this one was reading; its paint wins.
+  if (mine !== generation) return;
+
+  paintList(projects, areas, done);
+  paintDetail(project, area);
 }
 
 function saveField(field: ProjectFieldName, inputId: string, expected: () => string | null): void {
@@ -452,6 +578,15 @@ function saveField(field: ProjectFieldName, inputId: string, expected: () => str
     "project-error",
   );
 }
+
+// A title is one of the two fields always present, so unlike the others it
+// cannot be cleared — the core refuses an empty one and this renders that
+// refusal rather than pre-empting it (FR-003, FR-027).
+$("title-save").addEventListener("click", () => {
+  if (!current) return;
+  const next = ($("title-input") as HTMLInputElement).value;
+  void run(wp.projects.setField(current.slug, "title", current.title, next), "project-error");
+});
 
 $("outcome-save").addEventListener("click", () =>
   saveField("outcome", "outcome-input", () => current?.outcome ?? null),

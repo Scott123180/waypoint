@@ -87,6 +87,18 @@ export class ProjectService {
     return (await this.list()).filter((p) => p.status !== "done");
   }
 
+  /**
+   * Finished projects — the exact complement of `listActive()`.
+   *
+   * Here for the same reason its mirror is: a client that filtered `list()` on
+   * `status === "done"` would be holding the rule. It also makes finished work
+   * reachable at all, which is what keeps `reopen()` from being a verb with no
+   * way to call it (FR-029, SC-012).
+   */
+  async listCompleted(): Promise<ProjectSummary[]> {
+    return (await this.list()).filter((p) => p.status === "done");
+  }
+
   async get(slug: string): Promise<Project | null> {
     const content = await this.vault.read(path(slug));
     return content === null ? null : parseProject(content, slug);

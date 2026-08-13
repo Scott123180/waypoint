@@ -346,3 +346,19 @@ US4, Developer C on US3 and the Phase 7 signal work.
 - `packages/core/src/projects/types.ts` (T003) refines [plan.md](plan.md)'s module list, which named five files; the types are separated for the same reason Feature 2 put them in `sort/decision.ts`
 - Two things that look like omissions and are deliberate: no filesystem watching (research R7) and no write-ahead journal for dismissal (research R9). Both are argued in [research.md](research.md); do not add either without revisiting that reasoning
 - One thing that looks like duplication and is deliberate: `list()` and `listActive()` both exist. `listActive()` is the FR-032 rule, kept in the core so no client reimplements it; `list()` serves Feature 5's review and the retrospective, which need done projects too
+
+---
+
+## Phase 8: Convergence
+
+**Purpose**: Close the gaps a post-implementation assessment found between the artifacts and the code.
+
+Every item here is the same shape: a verb the core already implements, tested and reachable through IPC,
+that the renderer never gave the user a way to call. The core library satisfies its requirements; the thin
+client is thinner than the spec asks for.
+
+- [X] T082 Make completed projects reachable in `packages/desktop/src/renderer/projects.ts` — the sidebar is built only from `listActive()`, so a project completed in an earlier session cannot be viewed or reopened, leaving `reopen()` unreachable. Add a "Done" section or a show-completed toggle using the existing `projects:list` channel, and drop the hand-edit workaround from `packages/desktop/tests/e2e/projects-completion.spec.ts` §7 once the UI path exists per FR-029, SC-012, US2/AC8 (partial)
+- [X] T083 Add a milestone edit affordance to each milestone row in `packages/desktop/src/renderer/projects.ts` and `projects.html`, wired to the existing `wp.projects.editMilestone` — the definition of done and the verifier are currently uneditable without a text editor per FR-016, US1/AC5 (missing)
+- [X] T084 Add a title editor to the single-project view in `packages/desktop/src/renderer/projects.ts` and `projects.html`, wired to the `title` field of `projects:set-field`, which is already plumbed through IPC and preload per FR-025, FR-027, US1/AC5 (missing)
+- [X] T085 Source the open project's gaps from a summary that includes it rather than from `listActive()` in `packages/desktop/src/renderer/projects.ts` — a project outside the active list currently renders an empty "Needs structure" line, while status must have no effect on the flag per FR-021, FR-022 (contradicts)
+- [X] T086 Run `npm run test:e2e` on a machine with a display (or install `xvfb` locally) and fix what the five project specs surface — they have never executed, so every acceptance scenario needing the running app is unverified, and the preload regression already shipped past them per US1–US4 acceptance, quickstart §1–§13 (partial)
