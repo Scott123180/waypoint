@@ -13,7 +13,20 @@ import type { VaultStore } from "@waypoint/core";
  * See specs/002-inbox-view-sort/contracts/vault-format.md
  */
 export class FsVaultStore implements VaultStore {
-  constructor(private readonly vaultRoot: string) {}
+  constructor(
+    private readonly vaultRoot: string,
+    /**
+     * Raised after a write lands, so an open view can re-read.
+     *
+     * Hung here rather than off the IPC handlers the projects view calls, which
+     * is where it used to live: sort files an item into a project without ever
+     * touching those handlers, so an open projects window sat on stale rows
+     * until it was closed and reopened. Every writer reaches a project or area
+     * file through this class, so this is the one place that sees them all —
+     * and the local API and LLM layer inherit the signal for free.
+     */
+    private readonly onChanged?: () => void,
+  ) {}
 
   async list(dir: "projects" | "areas"): Promise<string[]> {
     try {
@@ -58,6 +71,10 @@ export class FsVaultStore implements VaultStore {
       await handle.close();
     }
     await rename(tmp, target);
+    // Only on success, and only once the rename has landed — a throw propagates
+    // past this and no listener is sent back to re-read a write that did not
+    // happen.
+    this.onChanged?.();
   }
 
   /**
@@ -86,5 +103,6 @@ export class FsVaultStore implements VaultStore {
     } finally {
       await handle.close();
     }
+    this.onChanged?.();
   }
 }

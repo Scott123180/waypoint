@@ -151,15 +151,14 @@ export function registerProjectsIpc(
   projects: ProjectService,
   areas: AreaService,
   hideProjects: () => void,
-  onVaultChange: () => void,
 ): void {
   ipcMain.on("projects:dismiss", () => hideProjects());
 
-  /** Raises the change signal on any successful write, and nothing else. */
-  const announce = <T extends { ok: boolean }>(outcome: T): T => {
-    if (outcome.ok) onVaultChange();
-    return outcome;
-  };
+  // Deliberately absent: any raising of the vault change signal. It used to be
+  // wrapped around each verb here, which meant only writes the projects view
+  // asked for were announced — sorting an item into a project changed the same
+  // file and told nobody. `FsVaultStore` raises it now, so a writer that never
+  // reaches this function still reaches every open view.
 
   // The core decides which projects are active and which are finished
   // (FR-032); the renderer renders what it is handed.
@@ -173,7 +172,7 @@ export function registerProjectsIpc(
   });
 
   ipcMain.handle("projects:create", async (_event, title: string) =>
-    announce(await projects.create(title)),
+    projects.create(title),
   );
 
   ipcMain.handle(
@@ -181,13 +180,13 @@ export function registerProjectsIpc(
     async (_event, slug: string, field: ProjectFieldName, expected: string | null, next: string | null) => {
       switch (field) {
         case "outcome":
-          return announce(await projects.setOutcome(slug, expected, next));
+          return await projects.setOutcome(slug, expected, next);
         case "next-action":
-          return announce(await projects.setNextAction(slug, expected, next));
+          return await projects.setNextAction(slug, expected, next);
         case "dri":
-          return announce(await projects.setDri(slug, expected, next));
+          return await projects.setDri(slug, expected, next);
         case "title":
-          return announce(await projects.setTitle(slug, expected ?? "", next ?? ""));
+          return await projects.setTitle(slug, expected ?? "", next ?? "");
       }
     },
   );
@@ -195,49 +194,49 @@ export function registerProjectsIpc(
   ipcMain.handle(
     "projects:set-status",
     async (_event, slug: string, expected: ProjectStatus, next: ProjectStatus) =>
-      announce(await projects.setStatus(slug, expected, next)),
+      projects.setStatus(slug, expected, next),
   );
 
   ipcMain.handle(
     "projects:add-milestone",
     async (_event, slug: string, definitionOfDone: string, verifier: string | null) =>
-      announce(await projects.addMilestone(slug, definitionOfDone, verifier)),
+      projects.addMilestone(slug, definitionOfDone, verifier),
   );
 
   ipcMain.handle(
     "projects:edit-milestone",
     async (_event, slug: string, ref: MilestoneRef, definitionOfDone: string, verifier: string | null) =>
-      announce(await projects.editMilestone(slug, ref, definitionOfDone, verifier)),
+      projects.editMilestone(slug, ref, definitionOfDone, verifier),
   );
 
   ipcMain.handle("projects:remove-milestone", async (_event, slug: string, ref: MilestoneRef) =>
-    announce(await projects.removeMilestone(slug, ref)),
+    projects.removeMilestone(slug, ref),
   );
 
   ipcMain.handle("projects:complete-milestone", async (_event, slug: string, ref: MilestoneRef) =>
-    announce(await projects.completeMilestone(slug, ref)),
+    projects.completeMilestone(slug, ref),
   );
 
   ipcMain.handle("projects:reopen-milestone", async (_event, slug: string, ref: MilestoneRef) =>
-    announce(await projects.reopenMilestone(slug, ref)),
+    projects.reopenMilestone(slug, ref),
   );
 
   ipcMain.handle(
     "projects:complete",
     async (_event, slug: string, opts?: { confirmOpenMilestones?: boolean }) =>
-      announce(await projects.complete(slug, opts)),
+      projects.complete(slug, opts),
   );
 
   ipcMain.handle(
     "projects:reopen",
     async (_event, slug: string, to: Exclude<ProjectStatus, "done">) =>
-      announce(await projects.reopen(slug, to)),
+      projects.reopen(slug, to),
   );
 
   ipcMain.handle(
     "projects:dismiss-unprocessed",
     async (_event, slug: string, index: number, expectedRaw: string) =>
-      announce(await projects.dismissUnprocessed(slug, index, expectedRaw)),
+      projects.dismissUnprocessed(slug, index, expectedRaw),
   );
 
   ipcMain.handle("areas:list", async () => areas.list());
@@ -247,24 +246,24 @@ export function registerProjectsIpc(
     return area === null ? null : { ...area, unprocessed: area.unprocessed.map(serializeItem) };
   });
 
-  ipcMain.handle("areas:create", async (_event, title: string) => announce(await areas.create(title)));
+  ipcMain.handle("areas:create", async (_event, title: string) => areas.create(title));
 
   ipcMain.handle(
     "areas:set-title",
     async (_event, slug: string, expected: string, next: string) =>
-      announce(await areas.setTitle(slug, expected, next)),
+      areas.setTitle(slug, expected, next),
   );
 
   ipcMain.handle(
     "areas:set-status",
     async (_event, slug: string, expected: AreaStatus, next: AreaStatus) =>
-      announce(await areas.setStatus(slug, expected, next)),
+      areas.setStatus(slug, expected, next),
   );
 
   ipcMain.handle(
     "areas:dismiss-unprocessed",
     async (_event, slug: string, index: number, expectedRaw: string) =>
-      announce(await areas.dismissUnprocessed(slug, index, expectedRaw)),
+      areas.dismissUnprocessed(slug, index, expectedRaw),
   );
 }
 

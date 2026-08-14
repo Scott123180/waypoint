@@ -88,10 +88,14 @@ function start(): void {
       }),
   });
 
+  // The counterpart for project and area files. Separate from the inbox signal
+  // because that one fires on every capture, which is noise here (research R7).
+  const vaultChanged = new VaultChanged();
+
   // One vault store, shared by sort and by project structure: both write the
   // same files, and a second instance would be a second set of assumptions
-  // about them.
-  const vaultStore = new FsVaultStore(config.vaultRoot);
+  // about them — including about who gets told when one of them changes.
+  const vaultStore = new FsVaultStore(config.vaultRoot, () => vaultChanged.raise());
 
   const sortService = new SortService({
     inbox: new FsInboxDocument(config.inboxPath, inboxMutex, raiseInboxChanged),
@@ -112,18 +116,13 @@ function start(): void {
   // rather than each writer learning who is listening.
   inboxChanged.subscribe(() => sortWindow.inboxChanged());
 
-  // The counterpart for project and area files. Separate from the inbox signal
-  // because that one fires on every capture, which is noise here (research R7).
-  const vaultChanged = new VaultChanged();
   vaultChanged.subscribe(() => projectsWindow.vaultChanged());
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
     tray?.refresh(),
   );
-  registerProjectsIpc(projectService, areaService, () => projectsWindow.hide(), () =>
-    vaultChanged.raise(),
-  );
+  registerProjectsIpc(projectService, areaService, () => projectsWindow.hide());
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).

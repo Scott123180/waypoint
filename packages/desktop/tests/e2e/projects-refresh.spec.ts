@@ -42,6 +42,47 @@ test("a write through the app updates the open view without reopening it", async
   await expect(view.locator('[data-project="roof-repair"]')).toContainText("0 of 1 done");
 });
 
+test("sorting an item into a project shows up in the open projects view", async () => {
+  // The write comes from the *sort* window, which never touches the projects
+  // IPC handlers. The signal used to be raised there, so this arrived on disk
+  // and nowhere else until the view was closed and reopened.
+  h.writeVaultFile("projects/roof-repair.md", STUB);
+  h.writeInbox("- 2026-08-09T14:23:05-04:00 Call the roofer back\n");
+
+  await h.openProjects();
+  const view = await h.projectsView();
+  await view.click('[data-project="roof-repair"]');
+  await expect(view.locator(".unprocessed-item")).toHaveCount(0);
+
+  await h.openSort();
+  const sort = await h.sortView();
+  await sort.locator("#to-project").click();
+  await sort.locator('#panel button[data-slug="roof-repair"]').click();
+
+  // No reopen, no click on the projects window — it redraws on the signal.
+  await expect(view.locator(".unprocessed-item")).toHaveCount(1);
+  await expect(view.locator(".unprocessed-item")).toContainText("Call the roofer back");
+});
+
+test("a project created while sorting appears in the open projects list", async () => {
+  // Same path, different verb: sort creates the destination file itself.
+  h.writeVaultFile("projects/roof-repair.md", STUB);
+  h.writeInbox("- 2026-08-09T14:23:05-04:00 Book flights for the offsite\n");
+
+  await h.openProjects();
+  const view = await h.projectsView();
+  await expect(view.locator("[data-project]")).toHaveCount(1);
+
+  await h.openSort();
+  const sort = await h.sortView();
+  await sort.locator("#to-project").click();
+  await sort.locator("#create-title").fill("Offsite planning");
+  await sort.locator("#create-title").press("Enter");
+
+  await expect(view.locator("[data-project]")).toHaveCount(2);
+  await expect(view.locator("[data-project]")).toContainText(["Offsite planning", "Roof repair"]);
+});
+
 test("a new project appears in the list as soon as it is created", async () => {
   h.writeVaultFile("projects/roof-repair.md", STUB);
   await h.openProjects();
