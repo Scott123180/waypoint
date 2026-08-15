@@ -174,3 +174,19 @@ Inbox viewing, sorting, projects, milestones, WIP limits, the review ritual, and
 are ROADMAP Features 2–6 and are **not** built here (FR-018). The inbox format is designed so
 Feature 2 can parse it, but **no parser is written now** — that would be speculative work against a
 consumer that does not yet exist.
+
+## Constitution Amendment Note — 2026-08-13
+
+**Principle V** changed from *The Core Enforces Process* to *Enforced Process, Separable Policy*
+(constitution 1.0.0 → 2.0.0). Process rules are still enforced by the system and still unbypassable
+by any client, but they are no longer core domain logic: core declares named decision points and
+consults a registered policy module, which returns `allow` / `warn` / `block` plus a reason.
+
+**Did the implementation need to change? No.** This feature contains no policy. Every refusal it
+makes — empty-input rejection, and the `expired` / `unknown-id` / `file-changed` undo outcomes — is a
+domain invariant or a concurrency check: a statement about what a capture *is* and what may validly
+be done to it, not an opinion about how the user should work. Those correctly remain in core under
+2.0.0.
+
+The Constitution Check row for V above is retained as the record of what was assessed at the time,
+and its verdict still stands under the amended principle.

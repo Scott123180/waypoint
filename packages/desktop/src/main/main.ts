@@ -6,6 +6,7 @@ import {
   CaptureService,
   ProjectService,
   SortService,
+  TopThreeService,
   type InboxWriteError,
 } from "@waypoint/core";
 
@@ -20,9 +21,10 @@ import { WhisperAdapter } from "./adapters/whisper-adapter";
 import { CaptureWindow } from "./capture-window";
 import { SortWindow } from "./sort-window";
 import { ProjectsWindow } from "./projects-window";
+import { TopThreeWindow } from "./top-three-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
-import { registerIpc, registerProjectsIpc } from "./ipc";
+import { registerIpc, registerProjectsIpc, registerTopThreeIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray, type TrayHandle } from "./tray";
 
@@ -105,6 +107,10 @@ function start(): void {
 
   const projectService = new ProjectService({ vault: vaultStore });
   const areaService = new AreaService({ vault: vaultStore });
+  // Same vault store again: the top three lives in the same directory, and
+  // sharing the store is what makes its writes raise the change signal every
+  // other view already listens to.
+  const topThreeService = new TopThreeService({ vault: vaultStore });
 
   const sortWindow = new SortWindow();
   const showSort = (): void => sortWindow.show();
@@ -112,17 +118,26 @@ function start(): void {
   const projectsWindow = new ProjectsWindow();
   const showProjects = (): void => projectsWindow.show();
 
+  const topThreeWindow = new TopThreeWindow();
+  const showTopThree = (): void => topThreeWindow.show();
+
   // The sort view is the only subscriber today. Later views subscribe here too
   // rather than each writer learning who is listening.
   inboxChanged.subscribe(() => sortWindow.inboxChanged());
 
+  // Both views subscribe to the same generic signal. A top-three write and a
+  // project write are both "a vault file changed", and neither view needs to
+  // know which — they re-read, which is the only account of the file that can
+  // be trusted anyway.
   vaultChanged.subscribe(() => projectsWindow.vaultChanged());
+  vaultChanged.subscribe(() => topThreeWindow.vaultChanged());
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
     tray?.refresh(),
   );
   registerProjectsIpc(projectService, areaService, () => projectsWindow.hide());
+  registerTopThreeIpc(topThreeService, () => topThreeWindow.hide());
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).
@@ -168,6 +183,7 @@ function start(): void {
     onUndo: () => void undoLatest(),
     onSort: showSort,
     onProjects: showProjects,
+    onTopThree: showTopThree,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -211,6 +227,9 @@ function start(): void {
       showProjects,
       hideProjects: () => projectsWindow.hide(),
       isProjectsVisible: () => projectsWindow.isVisible(),
+      showTopThree,
+      hideTopThree: () => topThreeWindow.hide(),
+      isTopThreeVisible: () => topThreeWindow.isVisible(),
       undoLatest,
       setStubTranscript: (text: string) => {
         stubTranscript.value = text;

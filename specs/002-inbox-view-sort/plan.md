@@ -205,3 +205,22 @@ nothing in this feature suggests, ranks, or pre-selects anything (FR-030).
 
 Undo of a completed sort decision is out of scope (FR-032). Soft-delete to `trash.md` is what makes that
 acceptable.
+
+## Constitution Amendment Note — 2026-08-13
+
+**Principle V** changed from *The Core Enforces Process* to *Enforced Process, Separable Policy*
+(constitution 1.0.0 → 2.0.0). Process rules are still enforced by the system and still unbypassable
+by any client, but they are no longer core domain logic: core declares named decision points and
+consults a registered policy module, which returns `allow` / `warn` / `block` plus a reason.
+
+**Did the implementation need to change? No.** This feature contains no policy. Its refusals —
+`item-changed` (optimistic concurrency), `destination-missing` (referential integrity), and
+`empty-title` / `empty-owner` (validation) — are all domain invariants. Inbox zero, which this
+feature computes from the file for Feature 5 to consume, is a *derived fact* about the inbox's
+contents, not a rule about it; deriving it in core stays correct under 2.0.0. The rule that will
+gate on that fact belongs to Feature 5 and will live in the policy module.
+
+The Constitution Check row for V above, and the FR-028 reference in
+`checklists/requirements.md`, are retained as the record of what was assessed at the time. Both
+verdicts still stand under the amended principle; only the phrase "core enforces" now reads as
+"core consults" for anything rule-shaped.

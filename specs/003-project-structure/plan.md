@@ -220,3 +220,83 @@ there. Nothing suggests, ranks, or pre-fills a value (FR-048).
 
 Deleting a project or an area. Renaming a project's file when its title changes (spec Assumptions).
 Filesystem watching (research R7).
+
+## Constitution Amendment Note — 2026-08-13
+
+**Principle V** changed from *The Core Enforces Process* to *Enforced Process, Separable Policy*
+(constitution 1.0.0 → 2.0.0). Process rules are still enforced by the system and still unbypassable
+by any client, but they are no longer core domain logic: core declares named decision points and
+consults a registered policy module, which returns `allow` / `warn` / `block` plus a reason.
+
+**Did the implementation need to change? Not yet — but two rules here are now policy, and this is
+the only shipped feature where that is true.**
+
+- **The structure flag stays in core.** `structureGaps()` / `needsStructure()` (`packages/core/src/projects/gaps.ts`)
+  is a derived fact about a file's contents — computed at read time, never stored, never blocking,
+  and explicitly not a gate on completion (FR-034e). It is a statement about what the project *is*,
+  not an opinion about how the user should work, so it is domain logic under 2.0.0 and does not move.
+- **The milestone cap is policy.** `MILESTONE_CAP = 4` is a hardcoded threshold enforced by a
+  blocking refusal in `ProjectService.addMilestone`. The spec is explicit that "four is where the
+  scope-creep discipline actually lives" — that is an opinion about how to work, i.e. a WIP limit in
+  all but name. Under 2.0.0 it belongs behind a `before-milestone-added` decision point returning
+  `block`, with the cap read from the data directory's policy configuration rather than a constant.
+- **The open-milestone confirmation is policy, and already `warn`-shaped.** `complete()` refuses with
+  `open-milestones` unless the caller confirms — a reason string plus a proceed-anyway path, which is
+  exactly the `warn` decision the amended principle defines. Under 2.0.0 it belongs behind a
+  `before-project-completed` decision point.
+
+Both migrations are behaviour-preserving: the same refusals, the same messages, reached through a
+decision point instead of an inline branch. Neither is urgent, because Feature 4 (top-three / WIP
+limit) is the first feature that *must* build the policy seam — so the cleanest path is to migrate
+these two rules as part of Feature 4 rather than as separate remediation.
+
+**Statements above and in sibling documents now superseded**: the scope note "A scope note on
+Principle V" in this plan, `research.md` R-section text stating that "Principle V says process rules
+live in the core", and `spec.md`'s note that "the core refuses a fifth (Principle V)". All three were
+correct under 1.0.0 and are retained as the historical record. The guarantee each was reaching for —
+that the HTTP API (Feature 7) and the LLM layer (Feature 8) cannot quietly route around a rule — is
+preserved unchanged by 2.0.0, because enforcement still happens at core's decision points rather than
+in a layer above core.
+
+---
+
+## Constitution Amendment Note — 2026-08-14 (Feature 4)
+
+**Appended, not a rewrite.** Everything above stands as the historical record of what was decided and
+why at the time. This note records only what has since changed.
+
+The migration anticipated above is **done**. Both rules moved behind decision points as part of
+[Feature 4](../004-top-three-wip-limit/plan.md), exactly as predicted here:
+
+- **The milestone cap** now lives in `packages/core/src/policy/default-policy.ts`, consulted at the
+  `project.milestone.add` decision point and returning `block`. The threshold comes from
+  `milestone cap` in the vault's `policy.md`, defaulting to 4. `MILESTONE_CAP` remains exported from
+  core as a deprecated alias for that default so no importer broke; a test asserts the two numbers
+  cannot drift apart.
+- **The open-milestone confirmation** now lives in the same module, consulted at the
+  `project.status.change` decision point and returning `warn`. Core translates that decision back into
+  the identical `{ ok: false, reason: "open-milestones", message, open }` refusal clients already
+  read — the renderer branches on that literal string, so renaming it at the seam would have silently
+  hidden the confirmation dialog.
+- **The structure flag did not move**, for the reason given above. `packages/core/src/projects/gaps.ts`
+  was not edited by Feature 4 at all.
+
+**Behaviour preservation was proved, not asserted.** Characterization tests
+(`milestone-cap-boundary.test.ts`, `open-milestones-boundary.test.ts`, and a desktop-level
+`open-milestones-dialog.test.ts`) were written against pre-move behaviour, pinning the *trigger
+boundaries* rather than only the refusals: the fourth milestone accepted silently, the fifth refused;
+marking done with nothing open asking nothing, with one or more open asking. They were then observed
+failing against deliberately broken rules before the migration, so they are known to be load-bearing
+rather than decoration. Feature 3's own suites — `project-service.milestones-add.test.ts`,
+`project-service.milestones-overflow.test.ts`, `project-complete.test.ts` and
+`flag-never-blocks.test.ts` — pass **byte-for-byte unmodified**.
+
+**One Feature 3 test was edited, deliberately.** `project-scope-boundaries.test.ts` contained a
+tripwire asserting that no WIP limit or top-three existed yet — written, in its own words, to catch
+"a later feature arriving early". Feature 4 *is* that later feature, so its boundary moved forward
+(the weekly review, the retrospective and the local API are still out of scope). Nothing in that file
+touching the milestone cap or the open-milestone confirmation was changed.
+
+**FR-009 is unchanged.** Feature 4 needed a "needs a DRI" signal and built it as a separate derived
+field on `ProjectSummary` rather than a fourth `StructureGap`, so a project missing only a DRI is
+still not flagged as needing structure.

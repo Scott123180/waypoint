@@ -11,8 +11,10 @@ import {
   type Project,
   type ProjectService,
   type ProjectStatus,
+  type OutcomeRef,
   type SortDecision,
   type SortService,
+  type TopThreeService,
 } from "@waypoint/core";
 
 import { toWhisperWav } from "./audio-encode";
@@ -167,9 +169,31 @@ export function registerProjectsIpc(
   ipcMain.handle("projects:list", async () => projects.list());
 
   ipcMain.handle("projects:get", async (_event, slug: string) => {
-    const project = await projects.get(slug);
-    return project === null ? null : serializeProject(project);
+    // `getResolved` rather than `get`: the detail view must give the same
+    // answer about the DRI as the list does, which means resolving against the
+    // whole vault rather than this one file (Feature 4, FR-020a).
+    const resolved = await projects.getResolved(slug);
+    if (resolved === null) return null;
+    return {
+      ...serializeProject(resolved.project),
+      // A distinct key: `dri` is the raw name the detail view renders as text,
+      // and overwriting it with the resolution object rendered "[object
+      // Object]" into the field. Two meanings, two names.
+      driResolution: resolved.dri,
+      needsDri: resolved.needsDri,
+    };
   });
+
+  // Deliberately absent: a channel for `identityConfigured()`. It was
+  // registered and never reachable — no preload method, no caller — because
+  // `projects:load` already carries the answer. Core still exposes the verb for
+  // Feature 5 and Feature 6; an unused channel is surface a client could come
+  // to depend on without anyone deciding it should exist.
+
+  // How much the user is driving, and whether the rules leave room. The
+  // comparison is policy's and the count is core's; the view renders the
+  // finished answer rather than computing either (Feature 4, FR-050).
+  ipcMain.handle("projects:load", async () => projects.overLimitState());
 
   ipcMain.handle("projects:create", async (_event, title: string) =>
     projects.create(title),
@@ -283,7 +307,7 @@ function serializeItem(item: { capturedAt: Date | null }): unknown {
  * the *active* list would silently report a done project as fully structured.
  * `structureGaps` is the core's own function, so nothing is computed here.
  */
-function serializeProject(project: Project): unknown {
+function serializeProject(project: Project): Record<string, unknown> {
   return {
     ...project,
     gaps: structureGaps(project),
@@ -292,4 +316,38 @@ function serializeProject(project: Project): unknown {
     milestonesTotal: project.milestones.length,
     unprocessed: project.unprocessed.map(serializeItem),
   };
+}
+
+/**
+ * The weekly top three.
+ *
+ * Thin pass-throughs, like every other block in this file. Deliberately absent:
+ * any channel that would let the renderer decide which week is current, whether
+ * a week is editable, or how to phrase a refusal — those are core's answers and
+ * the view renders them (Principle II).
+ *
+ * See specs/004-top-three-wip-limit/contracts/top-three-api.md
+ */
+export function registerTopThreeIpc(topThree: TopThreeService, hideTopThree: () => void): void {
+  ipcMain.on("top-three:dismiss", () => hideTopThree());
+
+  // No raising of the vault change signal here, for the reason given above:
+  // `FsVaultStore` raises it from its write path, so a writer that never
+  // reaches this function still reaches every open view.
+  ipcMain.handle("top-three:current", async () => topThree.current());
+  ipcMain.handle("top-three:history", async () => topThree.history());
+
+  ipcMain.handle("top-three:add", async (_event, text: string) => topThree.addOutcome(text));
+
+  ipcMain.handle("top-three:edit", async (_event, ref: OutcomeRef, text: string) =>
+    topThree.editOutcome(ref, text),
+  );
+
+  ipcMain.handle("top-three:remove", async (_event, ref: OutcomeRef) => topThree.removeOutcome(ref));
+
+  ipcMain.handle("top-three:complete", async (_event, ref: OutcomeRef) =>
+    topThree.completeOutcome(ref),
+  );
+
+  ipcMain.handle("top-three:reopen", async (_event, ref: OutcomeRef) => topThree.reopenOutcome(ref));
 }

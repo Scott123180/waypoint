@@ -1,3 +1,5 @@
+import type { ResolvedDri } from "../identity/types";
+
 /**
  * The shapes project and area work is expressed in.
  *
@@ -116,6 +118,22 @@ export interface ProjectSummary {
   /** Empty means fully structured. Computed on read, never stored (FR-020). */
   gaps: StructureGap[];
   completedOn: string | null;
+  /**
+   * Who the DRI is, relative to the user (Feature 4, FR-020a).
+   *
+   * Derived on every read from this project's DRI, the identity configuration,
+   * and the names on every other project — which is why it is computed by the
+   * service rather than by `summarize` alone.
+   */
+  dri: ResolvedDri;
+  /**
+   * No DRI named (Feature 4, FR-032).
+   *
+   * Deliberately **not** a fourth `StructureGap`. Adding one would silently
+   * reverse Feature 3's FR-009 and newly flag every otherwise-complete project
+   * that happens to have no owner. Informational, never blocking.
+   */
+  needsDri: boolean;
 }
 
 export interface AreaSummary {
@@ -138,11 +156,29 @@ export type RefusalReason =
   /** A title must always be present and non-empty (FR-003). */
   | "empty-title"
   /** A milestone needs a definition of done. */
-  | "empty-value";
+  | "empty-value"
+  /** Activating this would exceed the work-in-progress limit (Feature 4, FR-044). */
+  | "wip-limit";
 
 export type ProjectOutcome =
   | { ok: true; project: Project }
-  | { ok: false; reason: RefusalReason; message: string; open?: string[] };
+  | {
+      ok: false;
+      reason: RefusalReason;
+      message: string;
+      /** The still-open milestones. Set only for `open-milestones` (FR-034a). */
+      open?: string[];
+      /**
+       * Named items to act on. Set only for `wip-limit` (Feature 4, FR-046).
+       *
+       * Deliberately **not** a reuse of `open`. That field means "the still-open
+       * milestones" and nothing else, and a client already renders it as a
+       * confirmation list — overloading it would show a WIP block as an offer to
+       * complete the very project the user was trying to activate. Two meanings,
+       * two fields.
+       */
+      subjects?: string[];
+    };
 
 export type AreaOutcome =
   | { ok: true; area: Area }

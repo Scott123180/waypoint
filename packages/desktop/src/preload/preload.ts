@@ -177,7 +177,12 @@ export interface ProjectView {
   status: ProjectStatus;
   outcome: string | null;
   nextAction: string | null;
+  /** The DRI as written in the file — free text, rendered as-is. */
   dri: string | null;
+  /** How that name relates to the user. Decided by the core (Feature 4). */
+  driResolution: ResolvedDriView;
+  /** No DRI named. Its own signal, never part of `gaps` (Feature 4). */
+  needsDri: boolean;
   milestones: MilestoneView[];
   completedOn: string | null;
   unprocessed: UnprocessedView[];
@@ -188,6 +193,14 @@ export interface ProjectView {
   milestonesTotal: number;
 }
 
+export type DriResolution = "mine" | "theirs" | "unassigned" | "ambiguous";
+
+export interface ResolvedDriView {
+  resolution: DriResolution;
+  raw: string | null;
+  collidesWith?: string[];
+}
+
 export interface ProjectSummaryView {
   slug: string;
   title: string;
@@ -196,6 +209,10 @@ export interface ProjectSummaryView {
   milestonesTotal: number;
   gaps: StructureGap[];
   completedOn: string | null;
+  /** Feature 4: who the DRI is, relative to the user. Decided by the core. */
+  dri: ResolvedDriView;
+  /** Feature 4: its own signal, never folded into `gaps`. */
+  needsDri: boolean;
 }
 
 export interface AreaView {
@@ -208,7 +225,15 @@ export interface AreaView {
 
 export type ProjectResponse =
   | { ok: true; project: ProjectView }
-  | { ok: false; reason: string; message: string; open?: string[] };
+  | {
+      ok: false;
+      reason: string;
+      message: string;
+      /** The still-open milestones. Only for `open-milestones`. */
+      open?: string[];
+      /** Projects to finish or park. Only for `wip-limit` — never `open`. */
+      subjects?: string[];
+    };
 
 export type AreaResponse =
   | { ok: true; area: AreaView }
@@ -295,6 +320,16 @@ const projectsApi = {
     ipcRenderer.send("projects:dismiss");
   },
 
+  /**
+   * How much the user is driving, and whether there is room for more.
+   *
+   * A finished answer: the count comes from the core and the comparison from
+   * the policy module. The renderer must not recompute either (Feature 4).
+   */
+  load(): Promise<ProjectLoad> {
+    return ipcRenderer.invoke("projects:load");
+  },
+
   /** The window was shown. Redraw everything. */
   onRefresh(callback: () => void): void {
     ipcRenderer.on("projects:refresh", () => callback());
@@ -338,18 +373,114 @@ const areasApi = {
   },
 };
 
+/**
+ * The weekly top three.
+ *
+ * Note what is missing: nothing here computes the current week, decides whether
+ * a week may be edited, or formats a refusal. The renderer asks and renders;
+ * `Week.current` and every message arrive from the core.
+ */
+const topThreeApi = {
+  /** The week the clock is in. Empty rather than absent when never set. */
+  current(): Promise<TopThreeWeek> {
+    return ipcRenderer.invoke("top-three:current");
+  },
+
+  /** Every week on file, newest first, current one included. */
+  history(): Promise<TopThreeWeek[]> {
+    return ipcRenderer.invoke("top-three:history");
+  },
+
+  /** Refuses `outcome-cap` at the configured maximum. */
+  add(text: string): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:add", text);
+  },
+
+  edit(ref: TopThreeRef, text: string): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:edit", ref, text);
+  },
+
+  remove(ref: TopThreeRef): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:remove", ref);
+  },
+
+  complete(ref: TopThreeRef): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:complete", ref);
+  },
+
+  reopen(ref: TopThreeRef): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:reopen", ref);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("top-three:dismiss");
+  },
+
+  /** Redraw everything — sent when the window opens. */
+  onRefresh(handler: () => void): void {
+    ipcRenderer.on("top-three:refresh", () => handler());
+  },
+
+  /**
+   * A vault file changed while this view was open.
+   *
+   * The same generic signal the projects view listens to, and deliberately not
+   * a `top-three:changed` of its own: `top-three.md` is written through the
+   * same `VaultStore`, so a hand-edit, another window, or a future API client
+   * all arrive here with nothing to remember (research R9).
+   */
+  onVaultChanged(handler: () => void): void {
+    ipcRenderer.on("vault:changed", () => handler());
+  },
+};
+
+export interface ProjectLoad {
+  driving: number;
+  subjects: string[];
+  hasRoom: boolean;
+  message: string;
+  identityConfigured: boolean;
+}
+
+export interface TopThreeOutcome {
+  index: number;
+  text: string;
+  done: boolean;
+  completedOn: string | null;
+  raw: string;
+}
+
+export interface TopThreeWeek {
+  id: string;
+  outcomes: TopThreeOutcome[];
+  current: boolean;
+}
+
+export interface TopThreeRef {
+  week: string;
+  index: number;
+  raw: string;
+}
+
+export type TopThreeResponse =
+  | { ok: true; week: TopThreeWeek }
+  | { ok: false; reason: string; message: string };
+
 contextBridge.exposeInMainWorld("waypoint", {
   ...api,
   sort: sortApi,
   projects: projectsApi,
   areas: areasApi,
+  topThree: topThreeApi,
 });
 
 export type WaypointApi = typeof api & {
   sort: typeof sortApi;
   projects: typeof projectsApi;
   areas: typeof areasApi;
+  topThree: typeof topThreeApi;
 };
 export type WaypointSortApi = typeof sortApi;
 export type WaypointProjectsApi = typeof projectsApi;
 export type WaypointAreasApi = typeof areasApi;
+export type WaypointTopThreeApi = typeof topThreeApi;

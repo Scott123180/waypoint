@@ -52,6 +52,14 @@ export class FakeVaultStore implements VaultStore {
   /** Vault-relative paths whose next write should throw. */
   failWrites = new Set<string>();
   writeLog: string[] = [];
+  /**
+   * Every path read, in order, including misses.
+   *
+   * Feature 4 asserts on the *count*: producing a project list must read each
+   * project file at most once. Timing cannot catch a quadratic read path on
+   * fast hardware; counting can (004 research R6).
+   */
+  readLog: string[] = [];
 
   list(dir: "projects" | "areas"): Promise<string[]> {
     const prefix = `${dir}/`;
@@ -63,6 +71,7 @@ export class FakeVaultStore implements VaultStore {
   }
 
   read(relPath: string): Promise<string | null> {
+    this.readLog.push(relPath);
     return Promise.resolve(this.files.get(relPath) ?? null);
   }
 

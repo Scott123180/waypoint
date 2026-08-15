@@ -58,11 +58,23 @@ interface ProjectView {
   milestones: MilestoneView[];
   completedOn: string | null;
   unprocessed: UnprocessedView[];
+  /** How the DRI relates to the user. Distinct from `dri`, which is the name. */
+  driResolution: ResolvedDriView;
+  needsDri: boolean;
   /** Derived by the core and sent with the project, so status cannot affect it. */
   gaps: StructureGap[];
   /** Reported by the core; the view renders these rather than counting (FR-017). */
   milestonesDone: number;
   milestonesTotal: number;
+}
+
+/** How a DRI relates to the user. Decided by the core, never here. */
+type DriResolutionView = "mine" | "theirs" | "unassigned" | "ambiguous";
+
+interface ResolvedDriView {
+  resolution: DriResolutionView;
+  raw: string | null;
+  collidesWith?: string[];
 }
 
 interface ProjectSummaryView {
@@ -73,6 +85,19 @@ interface ProjectSummaryView {
   milestonesTotal: number;
   gaps: StructureGap[];
   completedOn: string | null;
+  /** Feature 4: who the DRI is, relative to the user. */
+  dri: ResolvedDriView;
+  /** Feature 4: its own signal, never part of `gaps`. */
+  needsDri: boolean;
+}
+
+/** The finished answer from the core; the view never recomputes it. */
+interface ProjectLoadView {
+  driving: number;
+  subjects: string[];
+  hasRoom: boolean;
+  message: string;
+  identityConfigured: boolean;
 }
 
 interface AreaView {
@@ -85,11 +110,20 @@ interface AreaView {
 
 type ProjectResponse =
   | { ok: true; project: ProjectView }
-  | { ok: false; reason: string; message: string; open?: string[] };
+  | {
+      ok: false;
+      reason: string;
+      message: string;
+      /** The still-open milestones. Only for `open-milestones`. */
+      open?: string[];
+      /** Projects to finish or park. Only for `wip-limit` — never `open`. */
+      subjects?: string[];
+    };
 
 type AreaResponse = { ok: true; area: AreaView } | { ok: false; reason: string; message: string };
 
 interface ProjectsApi {
+  load(): Promise<ProjectLoadView>;
   listActive(): Promise<ProjectSummaryView[]>;
   listCompleted(): Promise<ProjectSummaryView[]>;
   list(): Promise<ProjectSummaryView[]>;
@@ -217,8 +251,37 @@ function projectRow(p: ProjectSummaryView): HTMLElement {
     row.append(flag);
   }
 
+  // Two separate signals, deliberately rendered as two separate things. A
+  // project missing only a DRI is not "incomplete" (Feature 3 FR-009), and an
+  // ambiguous one is not the user's until they say so. Both are informational
+  // and neither disables anything (FR-035).
+  const driNote = driLabel(p.dri, p.needsDri);
+  if (driNote) {
+    const flag = document.createElement("div");
+    flag.className = "needs-structure";
+    flag.dataset["dri"] = p.dri.resolution;
+    flag.textContent = driNote;
+    row.append(flag);
+  }
+
   row.addEventListener("click", () => void select({ kind: "project", slug: p.slug }));
   return row;
+}
+
+/**
+ * The short note shown beside a project, or null for nothing worth saying.
+ *
+ * `theirs` is silent on purpose: most projects a manager oversees are somebody
+ * else's, and labelling every one of them would be noise that trains the user
+ * to stop reading these notes at all.
+ */
+function driLabel(dri: ResolvedDriView, needsDri: boolean): string | null {
+  if (needsDri) return "needs a DRI";
+  if (dri.resolution === "ambiguous") {
+    const others = (dri.collidesWith ?? []).join(", ");
+    return others ? `ambiguous DRI — also matches ${others}` : "ambiguous DRI";
+  }
+  return null;
 }
 
 function areaRow(slug: string, title: string): HTMLElement {
@@ -300,6 +363,7 @@ function paintProject(project: ProjectView): void {
   renderUnprocessed(project);
 
   $("project-error").textContent = "";
+  $("wip-subjects").replaceChildren();
   $("milestone-error").textContent = "";
   $("confirm").hidden = true;
 }
@@ -531,6 +595,19 @@ async function run(call: Promise<ProjectResponse>, errorId: string): Promise<boo
 
   if (!outcome.ok) {
     $(errorId).textContent = outcome.message;
+
+    // The refusal says "finish or park one of these first"; without the list
+    // that sentence points at nothing. Core names them so the view has nothing
+    // to compute — it only has to draw them (FR-046).
+    if (outcome.reason === "wip-limit") {
+      $("wip-subjects").replaceChildren(
+        ...(outcome.subjects ?? []).map((title) => {
+          const li = document.createElement("li");
+          li.textContent = title;
+          return li;
+        }),
+      );
+    }
     return false;
   }
   return true;
@@ -555,12 +632,13 @@ let generation = 0;
 
 async function refreshAll(): Promise<void> {
   const mine = ++generation;
-  const [projects, areas, done, project, area] = await Promise.all([
+  const [projects, areas, done, project, area, load] = await Promise.all([
     wp.projects.listActive(),
     wp.areas.list(),
     wp.projects.listCompleted(),
     selection?.kind === "project" ? wp.projects.get(selection.slug) : Promise.resolve(null),
     selection?.kind === "area" ? wp.areas.get(selection.slug) : Promise.resolve(null),
+    wp.projects.load(),
   ]);
 
   // A newer refresh started while this one was reading; its paint wins.
@@ -568,6 +646,32 @@ async function refreshAll(): Promise<void> {
 
   paintList(projects, areas, done);
   paintDetail(project, area);
+  paintLoad(load);
+}
+
+/**
+ * How much the user is driving, shown above the list.
+ *
+ * Every judgement here is the core's or the policy module's: the count, whether
+ * there is room, and the wording when there is not. This concatenates.
+ */
+function paintLoad(load: ProjectLoadView): void {
+  const note = $("load-note");
+
+  if (!load.identityConfigured) {
+    // Distinguished from "nothing is mine" on purpose — a silent limit and a
+    // satisfied limit look identical otherwise (FR-031).
+    note.hidden = false;
+    note.dataset["full"] = "false";
+    note.textContent = "No identity set, so no project is known to be yours.";
+    return;
+  }
+
+  note.hidden = false;
+  note.dataset["full"] = String(!load.hasRoom);
+  note.textContent = load.hasRoom
+    ? `Driving ${load.driving}.`
+    : `Driving ${load.driving}. ${load.message}`;
 }
 
 function saveField(field: ProjectFieldName, inputId: string, expected: () => string | null): void {

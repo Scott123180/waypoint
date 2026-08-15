@@ -65,9 +65,23 @@ describe("ProjectSummary", () => {
   test("everything the list needs is present without a second call", async () => {
     const { vault, projects } = service({ "projects/a.md": STRUCTURED });
     const [s] = await projects.list();
+    // 2026-08-14, Feature 4 added `dri` and `needsDri`. Additive: every field
+    // this test was written to guarantee is still here, and the point of the
+    // assertion — that a caller needs no second call to render a row — is
+    // stronger now, not weaker.
     assert.deepEqual(
       Object.keys(s ?? {}).sort(),
-      ["completedOn", "gaps", "milestonesDone", "milestonesTotal", "slug", "status", "title"],
+      [
+        "completedOn",
+        "dri",
+        "gaps",
+        "milestonesDone",
+        "milestonesTotal",
+        "needsDri",
+        "slug",
+        "status",
+        "title",
+      ],
     );
     assert.deepEqual(vault.writeLog, [], "listing must not write");
   });

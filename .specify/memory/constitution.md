@@ -1,24 +1,45 @@
 <!--
 Sync Impact Report
-Version change: [TEMPLATE] → 1.0.0
-Modified principles: N/A (initial ratification; template placeholders replaced)
-Added sections:
-  - Core Principles I-VII (Test-First Development, Library-First Architecture,
-    Local-First & Offline, Durable Plain-Text Data, Core Enforces Process,
-    Instant Non-Blocking Capture, One Consistent Interaction Model)
-  - Governance
-Removed sections:
-  - [SECTION_2_NAME] / [SECTION_3_NAME] placeholders (not needed; all substantive
-    constraints are captured as principles per user input)
+Version change: 1.0.0 → 2.0.0
+Modified principles:
+  - V. The Core Enforces Process → V. Enforced Process, Separable Policy
+    (BACKWARD-INCOMPATIBLE REDEFINITION) Process enforcement remains mandatory
+    and unbypassable, but process rules are no longer core domain logic. Core now
+    declares named decision points and consults a registered policy module;
+    decisions are allow/warn/block plus a displayable reason. Policy configuration
+    is stored in the git-tracked data directory alongside projects, areas, and the
+    inbox. Exactly one default policy module ships; plugin loaders, module
+    discovery, and any public extension API are explicitly out of scope — the seam
+    and interface only, internal until deliberately published.
+    Prior behavior no longer required: rules encoded directly inside core domain
+    logic. Such code now violates the principle and must be relocated behind a
+    policy module at a core decision point.
+Added sections: none
+Removed sections: none
+Principle count unchanged: seven (I-VII)
 Templates requiring follow-up:
   - .specify/templates/plan-template.md — ⚠ pending manual review to confirm its
     Constitution Check gates reference these seven principles by name
   - .specify/templates/spec-template.md — ⚠ pending manual review for alignment
   - .specify/templates/tasks-template.md — ⚠ pending manual review to ensure
     TDD ordering (tests before implementation) is enforced in generated tasks
+Shipped features re-assessed against amended Principle V (original Constitution
+Check rows preserved as historical record; a dated "Constitution Amendment Note"
+was appended to each plan rather than rewriting the prior assessment):
+  - specs/001-quick-capture/plan.md — no policy present; no code change required
+  - specs/002-inbox-view-sort/plan.md — no policy present; no code change required
+  - specs/003-project-structure/plan.md — two rules reclassified as policy:
+    MILESTONE_CAP (block) and the open-milestones confirmation (warn). Both to
+    migrate behind decision points as part of Feature 4, which must build the
+    policy seam regardless. The structure flag stays in core: derived, read-time,
+    non-blocking — a fact about the file, not an opinion about how to work.
+Superseded statements left in place as historical record:
+  - specs/003-project-structure/plan.md "A scope note on Principle V"
+  - specs/003-project-structure/research.md (process rules "live in the core")
+  - specs/003-project-structure/spec.md (milestone cap cites Principle V)
 Deferred TODOs:
-  - TODO(RATIFICATION_DATE): original adoption date unknown; using today's date
-    (2026-08-09) as the ratification date since this is the first ratified version.
+  - TODO(RATIFICATION_DATE): original adoption date unknown; 2026-08-09 (the date
+    of first ratification) is retained as the ratification date.
 -->
 
 # Waypoint Constitution
@@ -72,17 +93,42 @@ application running.
 **Rationale**: Data must outlive the application. Plain text guarantees
 recoverability, greppability, and freedom from vendor or version lock-in.
 
-### V. The Core Enforces Process
-Rituals that give the system its value — inbox-zero processing, the weekly
-review sequence, work-in-progress limits, and any other defined ritual — MUST
-be enforced in core logic (e.g., blocking disallowed state transitions,
-refusing to exceed limits, requiring review steps to complete in order). These
-rules MUST NOT be left to user memory, documentation, or client-side
-convention; a client that bypasses the core cannot bypass the rule.
+### V. Enforced Process, Separable Policy
+Process rules MUST be enforced by the system and MUST NOT be left to user
+discipline, documentation, or client-side convention. They are NOT, however,
+part of core domain logic. Core defines what things are and what may be done to
+them; policy defines what should be allowed, discouraged, or blocked. The two
+MUST be separate modules.
+
+- **Core owns the enforcement points.** Core MUST declare a defined set of
+  named decision points — for example, before a project's status changes,
+  before a milestone is marked done, before a review is closed — and MUST
+  consult whatever policy module is registered at each one. Core MUST NOT
+  know what the rules are; it knows only where rules are consulted.
+- **Decisions are a closed set.** A policy decision MUST return exactly one of
+  `allow`, `warn`, or `block`, together with a reason the client can display.
+- **No client can bypass a rule another client enforces.** Because enforcement
+  lives at core's decision points rather than in a layer above it, all clients
+  MUST receive the same decision for the same action.
+- **Policy configuration lives with the data, not with the application.** It
+  MUST be stored in the same git-tracked data directory as projects, areas, and
+  the inbox. Any client opening that data directory therefore loads the same
+  rules by construction, so clients cannot disagree about policy, and rules
+  travel with the data across machines.
+- **One default module, no extension surface yet.** The application ships with
+  exactly one default policy module. A plugin loader, module discovery
+  mechanism, or public extension API MUST NOT be built at this time — build the
+  seam and the interface only. The interface is internal until deliberately
+  published.
 
 **Rationale**: Discipline that depends on the user remembering to follow a
-process fails under load. Encoding the ritual in the core is what makes the
-system trustworthy across all clients and over time.
+process fails under load, so the system must enforce it. But rules change far
+more often than the domain does, and entangling them makes both harder to
+change and harder to test. Separating them keeps the domain stable while the
+rules stay editable, and anchoring the seam inside core — rather than above it
+— is what preserves the unbypassable, all-clients-agree guarantee. Storing
+configuration alongside the data makes agreement structural rather than a
+convention each client must honor.
 
 ### VI. Instant, Non-Blocking Capture
 The capture surface MUST respond to the user within a tight, defined time
@@ -132,7 +178,7 @@ workflow MUST include a Constitution Check step that verifies alignment with
 all seven principles above before implementation proceeds. Any deviation MUST
 be justified in writing (a "Complexity Tracking" or equivalent section) or the
 plan MUST be revised to comply. Reviewers MUST treat violations of Principles
-I (Test-First), III (Local-First), IV (Plain-Text Data), and V (Core Enforces
-Process) as blocking, not advisory.
+I (Test-First), III (Local-First), IV (Plain-Text Data), and V (Enforced
+Process, Separable Policy) as blocking, not advisory.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-09 | **Last Amended**: 2026-08-09
+**Version**: 2.0.0 | **Ratified**: 2026-08-09 | **Last Amended**: 2026-08-13

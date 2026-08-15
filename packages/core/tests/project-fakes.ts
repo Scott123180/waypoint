@@ -33,6 +33,7 @@ export function seedVault(files: Record<string, string>): FakeVaultStore {
   }
   // Seeding is setup, not a write under test.
   vault.writeLog.length = 0;
+  vault.readLog.length = 0;
   return vault;
 }
 

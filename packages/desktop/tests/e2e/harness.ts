@@ -42,6 +42,8 @@ export interface Harness {
   sortView(): Promise<Page>;
   /** Opens the projects view, as the tray entry does. */
   openProjects(): Promise<void>;
+  openTopThree(): Promise<void>;
+  topThreeView(): Promise<Page>;
   /** Hides it, as closing the window does. Reopening re-reads from disk. */
   closeProjects(): Promise<void>;
   isProjectsVisible(): Promise<boolean>;
@@ -249,6 +251,29 @@ export async function launch(
         if (page.url().includes("projects.html")) return page;
       }
       return app.waitForEvent("window", (p) => p.url().includes("projects.html"));
+    },
+    async openTopThree() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showTopThree();
+      });
+      const view = await harness.topThreeView();
+      // Same reason as the projects view: the first paint reads from disk
+      // asynchronously, so an assertion can otherwise race it.
+      //
+      // Waits on the week heading rather than `#current`, which is an empty
+      // `<ul>` on an empty week and therefore never "visible" — the common
+      // case for this view, and the one most worth testing.
+      await view.waitForFunction(() => {
+        const el = document.getElementById("week-id");
+        return el !== null && (el.textContent ?? "").length > 0;
+      });
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async topThreeView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("top-three.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("top-three.html"));
     },
     async close() {
       await app.close();

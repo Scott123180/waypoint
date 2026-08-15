@@ -22,6 +22,7 @@ export interface TrayActions {
   /** Opens the sort view. The in-app entry point for Feature 2. */
   onSort: () => void;
   onProjects: () => void;
+  onTopThree: () => void;
 }
 
 /**
@@ -47,6 +48,7 @@ export function createTray(actions: TrayActions): TrayHandle | undefined {
         { label: "Undo last capture", click: actions.onUndo, enabled: actions.canUndo() },
         { label: "Sort inbox", click: actions.onSort },
         { label: "Projects", click: actions.onProjects },
+        { label: "Top three", click: actions.onTopThree },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },
       ]);
