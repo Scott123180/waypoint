@@ -32,6 +32,8 @@ interface T3Week {
   id: string;
   outcomes: T3Outcome[];
   current: boolean;
+  /** Whether the core will accept writes to this week. Decided there, not here. */
+  writable: boolean;
 }
 
 interface T3Ref {
@@ -45,7 +47,8 @@ type T3Response = { ok: true; week: T3Week } | { ok: false; reason: string; mess
 interface T3Api {
   current(): Promise<T3Week>;
   history(): Promise<T3Week[]>;
-  add(text: string): Promise<T3Response>;
+  writableWeeks(): Promise<{ current: T3Week; ahead: T3Week }>;
+  add(text: string, week?: string): Promise<T3Response>;
   edit(ref: T3Ref, text: string): Promise<T3Response>;
   remove(ref: T3Ref): Promise<T3Response>;
   complete(ref: T3Ref): Promise<T3Response>;
@@ -179,7 +182,7 @@ function t3PastWeek(week: T3Week): HTMLElement {
 
 async function t3Paint(): Promise<void> {
   const weeks = await t3wp.history();
-  const current = weeks.find((w) => w.current) ?? (await t3wp.current());
+  const { current, ahead } = await t3wp.writableWeeks();
 
   t3$("week-id").textContent = current.id;
 
@@ -187,10 +190,22 @@ async function t3Paint(): Promise<void> {
   list.replaceChildren(...current.outcomes.map((o) => t3OutcomeRow(current, o, true)));
   t3$("empty").hidden = current.outcomes.length > 0;
 
-  const past = weeks.filter((w) => !w.current);
+  // The week ahead, editable on the same terms. `writable` is the core's
+  // answer; this file does not work out which week is next, and does not know
+  // how far ahead the window reaches.
+  t3AheadId = ahead.id;
+  t3$("ahead-section").hidden = !ahead.writable;
+  t3$("ahead-id").textContent = `${ahead.id} — next week`;
+  t3$("ahead").replaceChildren(...ahead.outcomes.map((o) => t3OutcomeRow(ahead, o, true)));
+
+  // Everything that is not one of the two writable weeks is a record.
+  const past = weeks.filter((w) => !w.writable);
   t3$("past-section").hidden = past.length === 0;
   t3$("past").replaceChildren(...past.map(t3PastWeek));
 }
+
+/** The id the add-below-here box targets. Set by the paint that drew it. */
+let t3AheadId = "";
 
 // ---------------------------------------------------------------------------
 
@@ -219,6 +234,30 @@ t3$("add").addEventListener("click", () => {
 
 t3$("add-text").addEventListener("keydown", (event) => {
   if ((event as KeyboardEvent).key === "Enter") t3$("add").click();
+});
+
+t3$("ahead-add").addEventListener("click", () => {
+  const input = t3$("ahead-text") as HTMLInputElement;
+  const text = input.value;
+  if (text.trim().length === 0) return;
+
+  // Cleared now rather than on return, for the reason the current week's box
+  // gives: a late clear races the user's next keystroke.
+  input.value = "";
+
+  void t3wp.add(text, t3AheadId).then(async (result) => {
+    if (!result.ok) {
+      t3Error(result.message);
+      if (input.value === "") input.value = text;
+    } else {
+      t3Error("");
+    }
+    await t3Paint();
+  });
+});
+
+t3$("ahead-text").addEventListener("keydown", (event) => {
+  if ((event as KeyboardEvent).key === "Enter") t3$("ahead-add").click();
 });
 
 document.addEventListener("keydown", (event) => {

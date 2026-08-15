@@ -57,6 +57,35 @@ export interface MilestoneRef {
   raw: string;
 }
 
+/**
+ * One thing that happened to a project, in its append-only history.
+ *
+ * Deliberately not shaped around status changes, though status is the only
+ * action written today: `action` is a verb and `detail` is whatever follows it,
+ * so a later record type can carry a ledger without changing what a project's
+ * ledger means (Feature 5, FR-096).
+ */
+export interface LedgerEntry {
+  /** Local calendar date the action occurred. */
+  on: string;
+  /** The verb. `status` is the only one this feature writes (Feature 5, FR-090). */
+  action: string;
+  /** Everything after the verb: `active → waiting`. Verbatim. */
+  detail: string;
+  /**
+   * Days the ended state had lasted, when the ledger itself knows.
+   *
+   * null is the normal case for a project's first entry: the date a state began
+   * is observable at the transition and nowhere else, and one is never inferred
+   * (Feature 5, FR-094).
+   */
+  afterDays: number | null;
+  /** The state that ended, when known. */
+  afterState: string | null;
+  /** The full source line, so a hand-written entry survives a rewrite of others. */
+  raw: string;
+}
+
 /** A raw item sort routed into a project or area, not yet turned into structure. */
 export interface UnprocessedItem {
   /** Item text, verbatim, continuation lines included. */
@@ -86,6 +115,14 @@ export interface Project {
   completedOn: string | null;
   /** Items sort left behind, in file order (FR-046). */
   unprocessed: UnprocessedItem[];
+  /**
+   * How this project got where it is, oldest first (Feature 5, FR-087).
+   *
+   * Empty for every project that has had no action recorded against it, which
+   * is every project already on disk. A ledger is added by an action, never by
+   * a read — nothing here migrates a file (FR-099).
+   */
+  ledger: LedgerEntry[];
 }
 
 /**
@@ -134,6 +171,16 @@ export interface ProjectSummary {
    * that happens to have no owner. Informational, never blocking.
    */
   needsDri: boolean;
+  /**
+   * When this project's current status began, from its ledger (Feature 5).
+   *
+   * Derived on every read beside `gaps` and `needsDri`, and for the same
+   * reason: a stored copy drifts the first time the user edits the file in vim.
+   *
+   * null means the ledger does not say — a hand-edited status, or a project
+   * older than the ledger — and unknown is never stale (Feature 5, FR-094).
+   */
+  statusSince: string | null;
 }
 
 export interface AreaSummary {

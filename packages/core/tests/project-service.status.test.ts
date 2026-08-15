@@ -35,13 +35,27 @@ describe("setStatus", () => {
     assert.match(vault.files.get("projects/p.md") ?? "", /^status: parked$/m);
   });
 
-  test("changes only the status line", async () => {
+  test("changes only the status line and its ledger entry", async () => {
+    // 2026-08-15, Feature 5. This test read "changes only the status line" and
+    // asserted it by stripping `status:` and comparing the rest byte for byte.
+    // A status change now also appends one line to `## Ledger`, by design and in
+    // the same write (005 FR-089) — so the assertion was widened to name the
+    // second thing that is allowed to change, rather than relaxed to stop
+    // looking. Nothing else in the file may still move.
     const { vault, projects } = service();
     const before = vault.files.get("projects/p.md") ?? "";
     await projects.setStatus("p", "active", "waiting");
     const after = vault.files.get("projects/p.md") ?? "";
-    const strip = (s: string) => s.split("\n").filter((l) => !l.startsWith("status:")).join("\n");
+
+    const strip = (s: string): string =>
+      s
+        .split("\n")
+        .filter((l) => !l.startsWith("status:") && !l.startsWith("- ") && l !== "## Ledger")
+        .join("\n")
+        .replace(/\n+/g, "\n");
+
     assert.equal(strip(after), strip(before));
+    assert.match(after, /^- 2026-08-12 status active → waiting$/m, "exactly one entry, and it is the change");
   });
 
   test("a stub with no status line can still be moved off active", async () => {

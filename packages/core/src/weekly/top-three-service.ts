@@ -1,7 +1,7 @@
 import type { Clock, PolicyModule, VaultStore } from "../ports/index";
 import { createDefaultPolicy } from "../policy/default-policy";
 import { localDate } from "../vault/lists";
-import { isoWeek } from "./iso-week";
+import { isoWeek, nextWeek } from "./iso-week";
 import {
   parseTopThree,
   renderOutcome,
@@ -59,9 +59,7 @@ export class TopThreeService {
 
   /** The week the clock is in. Empty rather than absent when never set. */
   async current(): Promise<Week> {
-    const id = this.currentWeek();
-    const weeks = await this.read();
-    return weeks.find((w) => w.id === id) ?? { id, outcomes: [], current: true };
+    return this.weekOf(this.currentWeek());
   }
 
   /**
@@ -76,9 +74,29 @@ export class TopThreeService {
     const id = this.currentWeek();
     const weeks = await this.read();
     if (!weeks.some((w) => w.id === id)) {
-      weeks.push({ id, outcomes: [], current: true });
+      weeks.push(this.emptyWeek(id));
     }
     return weeks.sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+  }
+
+  /**
+   * The two weeks that may be written: this one and the next.
+   *
+   * Its own verb rather than a widening of `history()`. `history()` means
+   * "every week on file, plus the current one so it cannot vanish before it is
+   * filled in" — folding an always-empty future week into that would change
+   * what the record *is*, and four of Feature 4's tests said so by failing.
+   * Callers that need somewhere to write ask for that directly.
+   *
+   * Neither week is created on disk by being asked for.
+   */
+  async writableWeeks(): Promise<{ current: Week; ahead: Week }> {
+    const id = this.currentWeek();
+    const weeks = await this.read();
+    const find = (target: WeekId): Week =>
+      weeks.find((w) => w.id === target) ?? this.emptyWeek(target);
+
+    return { current: find(id), ahead: find(nextWeek(id)) };
   }
 
   // -------------------------------------------------------------------------
@@ -86,19 +104,29 @@ export class TopThreeService {
   // -------------------------------------------------------------------------
 
   /**
-   * Records a new outcome for the current week.
+   * Records a new outcome, for the current week or the next one.
    *
    * The only verb that consults policy: editing, completing, removing and
    * reopening cannot take a week over its maximum.
+   *
+   * `week` is optional so every existing caller keeps targeting the current
+   * week unchanged. A separate `addNextWeekOutcome` would have been a second
+   * write path with its own chance to forget the cap — and the cap is counted
+   * against the **target** week, which is the part a second path would get
+   * wrong (Feature 5, FR-050).
    */
-  async addOutcome(text: string): Promise<TopThreeOutcomeResult> {
+  async addOutcome(text: string, week?: WeekId): Promise<TopThreeOutcomeResult> {
     const clean = text.trim();
     if (clean.length === 0) {
       return refuse("empty-value", "An outcome needs some text. Nothing was added.");
     }
 
+    const target = week ?? this.currentWeek();
+    const outside = this.outsideWindow(target);
+    if (outside) return outside;
+
     return this.serialize(async () => {
-      const week = await this.current();
+      const week = await this.weekOf(target);
       const decision = await this.policy.decide({
         point: "week.outcome.record",
         week: week.id,
@@ -155,10 +183,60 @@ export class TopThreeService {
     return isoWeek(this.clock.now());
   }
 
+  /** One week as it stands, empty rather than absent when never written. */
+  private async weekOf(id: WeekId): Promise<Week> {
+    const weeks = await this.read();
+    return weeks.find((w) => w.id === id) ?? this.emptyWeek(id);
+  }
+
+  /** A week with no section yet. Never written to disk by being asked for. */
+  private emptyWeek(id: WeekId): Week {
+    const current = this.currentWeek();
+    return { id, outcomes: [], current: id === current, writable: this.isWritable(id) };
+  }
+
+  private isWritable(id: WeekId): boolean {
+    const current = this.currentWeek();
+    return id === current || id === nextWeek(current);
+  }
+
+  /**
+   * Is this week outside the writable window? Returns the refusal, or null.
+   *
+   * The window is **this week and the next**, on every surface. A review run at
+   * the end of week W commits to W+1, and the widening had to apply everywhere
+   * or the review would hold behaviour no other client has — which Principle II
+   * forbids and a later API would have to reimplement to agree (FR-049a).
+   *
+   * Past weeks are unchanged. That refusal is what makes the file a record.
+   */
+  private outsideWindow(week: WeekId): TopThreeOutcomeResult | null {
+    const current = this.currentWeek();
+    const ahead = nextWeek(current);
+    if (week === current || week === ahead) return null;
+
+    if (week < current) {
+      return refuse(
+        "past-week",
+        "That week is a record and is not edited here. Change it in the file directly if you mean to.",
+      );
+    }
+    // Named, because a refusal the user cannot act on is just an obstacle.
+    return refuse(
+      "future-week",
+      `You can set outcomes for ${current} and ${ahead}. ` +
+        "Anything further out is a plan, not a commitment — set it when the week arrives.",
+    );
+  }
+
   private async read(): Promise<Week[]> {
     const content = await this.vault.read(TOP_THREE_PATH);
     const id = this.currentWeek();
-    return parseTopThree(content).map((w) => ({ ...w, current: w.id === id }));
+    return parseTopThree(content).map((w) => ({
+      ...w,
+      current: w.id === id,
+      writable: this.isWritable(w.id),
+    }));
   }
 
   /**
@@ -173,16 +251,10 @@ export class TopThreeService {
   private async verify(
     ref: OutcomeRef,
   ): Promise<{ week: Week; outcome: Outcome } | { refusal: TopThreeOutcomeResult }> {
-    if (ref.week !== this.currentWeek()) {
-      return {
-        refusal: refuse(
-          "past-week",
-          "That week is a record and is not edited here. Change it in the file directly if you mean to.",
-        ),
-      };
-    }
+    const outside = this.outsideWindow(ref.week);
+    if (outside) return { refusal: outside };
 
-    const week = await this.current();
+    const week = await this.weekOf(ref.week);
     const outcome = week.outcomes[ref.index];
     if (!outcome || outcome.raw !== ref.raw) {
       const now = outcome ? `It now reads: ${outcome.text}` : "It is no longer there.";
@@ -243,7 +315,7 @@ export class TopThreeService {
     await this.vault.write(TOP_THREE_PATH, setWeekLines(content, week, reflow(existing, lines)));
 
     const written = (await this.read()).find((w) => w.id === week);
-    return { ok: true, week: written ?? { id: week, outcomes: [], current: week === this.currentWeek() } };
+    return { ok: true, week: written ?? this.emptyWeek(week) };
   }
 }
 

@@ -104,6 +104,20 @@
 
     <div id="error" role="alert"></div>
 
+    <!--
+      The week ahead. Writable because the core says it is — the weekly review
+      commits to it, and that capability belongs to the top three rather than
+      only to the review (Feature 5, FR-049a).
+    -->
+    <div class="ahead" id="ahead-section" hidden>
+      <h2 id="ahead-id"></h2>
+      <ul id="ahead"></ul>
+      <div id="ahead-row">
+        <input id="ahead-text" type="text" placeholder="An outcome that matters next week" />
+        <button id="ahead-add">Add</button>
+      </div>
+    </div>
+
     <div class="past" id="past-section" hidden>
       <div id="past"></div>
     </div>

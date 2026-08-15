@@ -61,7 +61,7 @@ export class FakeVaultStore implements VaultStore {
    */
   readLog: string[] = [];
 
-  list(dir: "projects" | "areas"): Promise<string[]> {
+  list(dir: "projects" | "areas" | "log"): Promise<string[]> {
     const prefix = `${dir}/`;
     const slugs = [...this.files.keys()]
       .filter((p) => p.startsWith(prefix) && p.endsWith(".md"))

@@ -74,7 +74,9 @@ export type {
   UnprocessedItem,
   StructureGap,
   RefusalReason,
+  LedgerEntry,
 } from "./projects/types";
+export { parseLedgerLine, renderLedgerLine, statusSince } from "./projects/ledger";
 
 export { TopThreeService, TOP_THREE_PATH } from "./weekly/top-three-service";
 export type { TopThreeServiceDeps } from "./weekly/top-three-service";
@@ -87,6 +89,56 @@ export type {
   TopThreeRefusal,
   TopThreeOutcomeResult,
 } from "./weekly/types";
+
+/**
+ * The weekly review.
+ *
+ * `SummaryProvider` is exported as a type so the project can use the seam
+ * deliberately, not so a third party can register against it. There is no
+ * loader, no discovery, and no registration API — the same discipline the
+ * policy seam follows (FR-112).
+ */
+/**
+ * Delegated work. Its own module beside `projects/`, because "waiting on
+ * someone" is a different kind of record from "a project I am driving" — and
+ * because nothing here sends anything to anyone.
+ */
+export { WaitingService, WAITING_PATH } from "./waiting/waiting-service";
+export type { WaitingServiceDeps } from "./waiting/waiting-service";
+export { parseUnreadable, parseWaiting, renderActionLine } from "./waiting/waiting-document";
+export { outstanding, untouchedSince } from "./waiting/derive";
+export type {
+  WaitingItem,
+  WaitingAction,
+  WaitingRef,
+  WaitingOutcome,
+  WaitingRefusalReason,
+  UnreadableLine,
+} from "./waiting/types";
+
+export { ReviewService } from "./review/review-service";
+export type { ReviewServiceDeps } from "./review/review-service";
+export { REVIEW_STEPS } from "./review/types";
+export { LOG_DIR, reviewPath } from "./review/review-document";
+export type {
+  Review,
+  ReviewSummary,
+  ReviewStepName,
+  ReviewRefusal,
+  ReviewResult,
+  InboxStepRecord,
+  ProjectReviewRecord,
+  ProjectReviewAction,
+  WaitingReviewRecord,
+  TopThreeStepRecord,
+  AcceptedSummary,
+  ReviewRecordResult,
+  ProjectRefusal,
+  WalkEntry,
+  StaleFlag,
+  StaleWaitingItem,
+} from "./review/types";
+export type { SummaryProvider, ReviewRecord } from "./ports/index";
 
 export { SortService } from "./sort/sort-service";
 export type { SortServiceDeps } from "./sort/sort-service";

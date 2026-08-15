@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication, type Page } from "@playwright/test";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -34,6 +34,8 @@ export interface Harness {
   writeInbox(content: string): void;
   /** Reads any vault file, e.g. "waiting.md" or "projects/roof.md". */
   vaultFile(relPath: string): string;
+  /** Lists a vault directory, sorted. Empty when it does not exist — which is a state worth asserting. */
+  vaultDir(relPath: string): string[];
   /** Writes a vault file, creating parent directories. */
   writeVaultFile(relPath: string, content: string): void;
   /** Opens the sort view, as the tray entry does. */
@@ -44,6 +46,9 @@ export interface Harness {
   openProjects(): Promise<void>;
   openTopThree(): Promise<void>;
   topThreeView(): Promise<Page>;
+  /** Opens the weekly review, as the tray entry does. Never opened for the user. */
+  openReview(): Promise<void>;
+  reviewView(): Promise<Page>;
   /** Hides it, as closing the window does. Reopening re-reads from disk. */
   closeProjects(): Promise<void>;
   isProjectsVisible(): Promise<boolean>;
@@ -204,6 +209,10 @@ export async function launch(
       const p = join(dirname(inboxPath), relPath);
       return existsSync(p) ? readFileSync(p, "utf8") : "";
     },
+    vaultDir(relPath: string) {
+      const p = join(dirname(inboxPath), relPath);
+      return existsSync(p) ? readdirSync(p).sort() : [];
+    },
     writeVaultFile(relPath: string, content: string) {
       const p = join(dirname(inboxPath), relPath);
       mkdirSync(dirname(p), { recursive: true });
@@ -274,6 +283,27 @@ export async function launch(
         if (page.url().includes("top-three.html")) return page;
       }
       return app.waitForEvent("window", (p) => p.url().includes("top-three.html"));
+    },
+    async openReview() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showReview();
+      });
+      const view = await harness.reviewView();
+      // The first paint reads the log from disk asynchronously, so waiting on
+      // the week line rather than a fixed delay is what keeps this from racing.
+      // On a vault with no review started, that line says so — which is itself
+      // the state most worth being able to assert.
+      await view.waitForFunction(() => {
+        const el = document.getElementById("week-id");
+        return el !== null && (el.textContent ?? "").length > 0;
+      });
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async reviewView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("review.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("review.html"));
     },
     async close() {
       await app.close();

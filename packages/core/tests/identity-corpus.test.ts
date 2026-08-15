@@ -40,6 +40,9 @@ function project(dri: string | null, verifiers: string[] = []): Project {
     milestones,
     completedOn: null,
     unprocessed: [],
+    // Feature 5 added the ledger to `Project`. Empty is the honest value for a
+    // fixture that has had no action recorded against it.
+    ledger: [],
   };
 }
 

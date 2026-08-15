@@ -10,6 +10,7 @@ import { renderStub } from "../vault/stub";
 import {
   MILESTONES_HEADING,
   OUTCOME_HEADING,
+  appendLedgerLine,
   parseProject,
   setMilestoneLines,
   setPreambleField,
@@ -18,6 +19,7 @@ import {
   setUnprocessedBlocks,
 } from "./document";
 import { structureGaps } from "./gaps";
+import { renderStatusChange, statusSince } from "./ledger";
 import { renderMilestone } from "./milestone";
 import type {
   Milestone,
@@ -129,9 +131,25 @@ export class ProjectService {
    * user edits a file in vim (FR-020b, FR-020c, research R6).
    */
   async list(): Promise<ProjectSummary[]> {
+    return (await this.listDetailed()).map((d) => d.summary);
+  }
+
+  /**
+   * Every project in full, each with its summary, from the same one pass.
+   *
+   * For a caller that needs the body as well as the row — the weekly review's
+   * walk shows the outcome, the next action, and every milestone, and could
+   * otherwise only get them by reading each file a second time. That second
+   * read is exactly the quadratic path `list()` was shaped to avoid, so the
+   * cheaper answer lives here rather than in the caller (005 SC-016).
+   */
+  async listDetailed(): Promise<{ project: Project; summary: ProjectSummary }[]> {
     const projects = await this.readAll();
     const { identity, corpus } = await this.resolutionContext(projects);
-    return projects.map((p) => summarize(p, resolveDri(p.dri, identity, corpus)));
+    return projects.map((project) => ({
+      project,
+      summary: summarize(project, resolveDri(project.dri, identity, corpus)),
+    }));
   }
 
   /**
@@ -259,8 +277,12 @@ export class ProjectService {
     const refusal = await this.consultStatusChange(slug, next);
     if (refusal) return refusal;
 
-    return this.writeField(slug, expected, (p) => p.status, (content) =>
-      setPreambleField(content, "status", next),
+    // The ledger entry is written here, by the verb performing the action —
+    // never by a client and never by the review. The same status change made
+    // from any surface produces an identical entry, because there is one place
+    // that produces it (FR-092).
+    return this.writeField(slug, expected, (p) => p.status, (content, current) =>
+      this.withStatusEntry(setPreambleField(content, "status", next), current, next),
     );
   }
 
@@ -367,8 +389,10 @@ export class ProjectService {
     const content = await this.vault.read(path(slug));
     if (content === null) return notFound(slug);
 
+    const current = parseProject(content, slug);
     const withDate = setPreambleField(content, "completed", localDate(this.clock.now()));
-    await this.vault.write(path(slug), setPreambleField(withDate, "status", "done"));
+    const withStatus = setPreambleField(withDate, "status", "done");
+    await this.vault.write(path(slug), this.withStatusEntry(withStatus, current, "done"));
     return this.reread(slug);
   }
 
@@ -387,8 +411,10 @@ export class ProjectService {
     const content = await this.vault.read(path(slug));
     if (content === null) return notFound(slug);
 
+    const current = parseProject(content, slug);
     const cleared = setPreambleField(content, "completed", null);
-    await this.vault.write(path(slug), setPreambleField(cleared, "status", to));
+    const withStatus = setPreambleField(cleared, "status", to);
+    await this.vault.write(path(slug), this.withStatusEntry(withStatus, current, to));
     return this.reread(slug);
   }
 
@@ -447,12 +473,13 @@ export class ProjectService {
     slug: string,
     expected: T,
     read: (p: Project) => T,
-    apply: (content: string) => string,
+    apply: (content: string, current: Project) => string,
   ): Promise<ProjectOutcome> {
     const content = await this.vault.read(path(slug));
     if (content === null) return notFound(slug);
 
-    const actual = read(parseProject(content, slug));
+    const current = parseProject(content, slug);
+    const actual = read(current);
     if (!same(actual, expected)) {
       return refuse(
         "field-changed",
@@ -461,8 +488,36 @@ export class ProjectService {
       );
     }
 
-    await this.vault.write(path(slug), apply(content));
+    await this.vault.write(path(slug), apply(content, current));
     return this.reread(slug);
+  }
+
+  /**
+   * The status line and its ledger entry, composed into one content transform.
+   *
+   * One write, not two. A crash between them would leave a status the ledger
+   * does not explain, and the ledger's whole value is that it explains the
+   * status. `writeField` already takes a transform, so this is the natural
+   * shape rather than an extra mechanism (contracts/project-ledger.md).
+   *
+   * A no-op change records nothing: an entry records a change, and recording a
+   * non-change would put noise in the history *and* reset the duration clock,
+   * making a project that has sat untouched for months look freshly moved.
+   */
+  private withStatusEntry(content: string, current: Project, to: ProjectStatus): string {
+    if (current.status === to) return content;
+
+    return appendLedgerLine(
+      content,
+      renderStatusChange({
+        on: localDate(this.clock.now()),
+        from: current.status,
+        to,
+        // What the ledger already knows, and nothing more. No prior entry
+        // entering the state that just ended means no duration is recorded.
+        since: statusSince(current.ledger, current.status),
+      }),
+    );
   }
 
   /** A milestone's identity is its position plus its text (FR-045d). */
@@ -695,6 +750,9 @@ function summarize(project: Project, dri: ResolvedDri): ProjectSummary {
     // Its own signal, sitting beside `gaps` rather than inside it. A missing
     // DRI is not a structure gap (Feature 3 FR-009, Feature 4 FR-033).
     needsDri: dri.resolution === "unassigned",
+    // Derived here beside the other two, for the same reason: a stored copy
+    // drifts the first time the user edits the file by hand (Feature 5).
+    statusSince: statusSince(project.ledger, project.status),
   };
 }
 

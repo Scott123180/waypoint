@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Weekly review</title>
+    <style>
+      /*
+        The same five tokens the capture box, the sort view, the projects view
+        and the top three use, verbatim. Five windows, one tool (Principle VII).
+      */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --border: #d8d8d8;
+        --error: #a4262c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --fg: #f2f2f2;
+          --muted: #9a9a9a;
+          --border: #3a3a3a;
+          --error: #ff9a9a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+        overflow-y: auto;
+        padding: 20px 24px;
+      }
+
+      h1 { font-size: 17px; margin: 0 0 2px; }
+      .week-id { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+      /* ------------------------------------------------------------ rail -- */
+      #rail {
+        display: flex;
+        gap: 6px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+        margin-bottom: 16px;
+      }
+      #rail .step {
+        color: var(--muted);
+        font-size: 13px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+      }
+      #rail .step.current { color: var(--fg); border-color: var(--border); font-weight: 600; }
+      #rail .step.passed { color: var(--fg); }
+      #rail .step.passed::before { content: "✓ "; }
+
+      ul { list-style: none; margin: 0; padding: 0; }
+      li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+      li:last-child { border-bottom: none; }
+
+      .count { font-size: 15px; }
+      .muted { color: var(--muted); }
+      .stale { color: var(--error); font-size: 13px; }
+
+      button {
+        font: inherit;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--muted); }
+      button.link { border: none; color: var(--muted); padding: 2px 4px; }
+
+      input[type="text"], textarea {
+        font: inherit;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 8px;
+        width: 100%;
+      }
+      textarea { min-height: 5em; resize: vertical; }
+
+      #actions { display: flex; gap: 8px; margin-top: 18px; align-items: center; }
+      #warning { color: var(--muted); font-size: 13px; margin-top: 10px; }
+      #error { color: var(--error); font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+      #problems { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+      details { margin-top: 14px; }
+      summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+      pre {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 8px;
+        overflow-x: auto;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      h2 { font-size: 14px; margin: 0 0 8px; font-weight: 600; }
+      section[hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Weekly review</h1>
+    <div class="week-id" id="week-id"></div>
+
+    <div id="rail"></div>
+
+    <!-- Step 1 -------------------------------------------------------------->
+    <section id="step-inbox" hidden>
+      <h2>Inbox</h2>
+      <div class="count" id="inbox-count"></div>
+      <div id="actions">
+        <button id="open-sort">Go sort the inbox</button>
+      </div>
+    </section>
+
+    <!-- Step 2 -------------------------------------------------------------->
+    <section id="step-projects" hidden>
+      <h2>Projects</h2>
+      <div id="walk-position" class="muted"></div>
+      <div id="project"></div>
+    </section>
+
+    <!-- Step 3 -------------------------------------------------------------->
+    <section id="step-waiting" hidden>
+      <h2>Waiting for</h2>
+      <div id="waiting-total" class="muted"></div>
+      <ul id="waiting-stale"></ul>
+      <!--
+        Lines the grammar cannot read. Shown as they read, with no action
+        offered — they have no owner and no date, so there is nothing to chase.
+        They are here so the user's own words do not go missing from the one
+        view of their delegated work (FR-044).
+      -->
+      <div id="waiting-unreadable" hidden>
+        <div class="muted">These lines are in the file but could not be read:</div>
+        <ul id="waiting-unreadable-list"></ul>
+      </div>
+    </section>
+
+    <!-- Step 4 -------------------------------------------------------------->
+    <section id="step-top-three" hidden>
+      <h2>Top three</h2>
+      <div id="reviewed-week"></div>
+      <ul id="reviewed-outcomes"></ul>
+      <div id="ahead-week" class="muted"></div>
+      <ul id="ahead-outcomes"></ul>
+      <div id="actions">
+        <input id="ahead-text" type="text" placeholder="An outcome that matters next week" />
+        <button id="ahead-add">Add</button>
+      </div>
+    </section>
+
+    <!-- Completion ---------------------------------------------------------->
+    <section id="step-complete" hidden>
+      <h2>Finish</h2>
+      <textarea id="note" placeholder="Anything worth remembering about this week (optional)"></textarea>
+      <div id="summary-panel" hidden>
+        <div id="summary-draft"></div>
+        <button id="summary-accept">Record this summary</button>
+        <button id="summary-decline" class="link">No thanks</button>
+      </div>
+      <details id="record-panel">
+        <summary>What a summary provider would be sent</summary>
+        <pre id="record-json"></pre>
+      </details>
+    </section>
+
+    <!--
+      Past reviews ---------------------------------------------------------
+
+      The permanent record, and the reason the ritual is worth running. Always
+      present rather than tucked behind a step, because looking something up is
+      not part of the sequence — a user opens this to read last month as often
+      as to run this week (FR-071).
+
+      Read-only, deliberately: the app offers no way to re-run or overwrite a
+      finished week. Correcting history is done in a text editor, on purpose
+      (FR-011).
+    -->
+    <details id="past-panel" hidden>
+      <summary>Past reviews</summary>
+      <ul id="past-list"></ul>
+      <pre id="past-record"></pre>
+    </details>
+
+    <div id="warning" role="status"></div>
+    <div id="error" role="alert"></div>
+    <div id="problems"></div>
+
+    <div id="nav">
+      <button id="back" class="link">Back</button>
+      <button id="advance">Next</button>
+      <button id="complete" hidden>Complete review</button>
+    </div>
+
+    <script src="./review.js"></script>
+  </body>
+</html>

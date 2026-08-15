@@ -12,9 +12,12 @@ import {
   type ProjectService,
   type ProjectStatus,
   type OutcomeRef,
+  type ReviewService,
+  type ReviewStepName,
   type SortDecision,
   type SortService,
   type TopThreeService,
+  type WaitingRef,
 } from "@waypoint/core";
 
 import { toWhisperWav } from "./audio-encode";
@@ -336,8 +339,16 @@ export function registerTopThreeIpc(topThree: TopThreeService, hideTopThree: () 
   // reaches this function still reaches every open view.
   ipcMain.handle("top-three:current", async () => topThree.current());
   ipcMain.handle("top-three:history", async () => topThree.history());
+  // The two weeks that may be written. The core decides which those are; the
+  // view renders them (Feature 5, FR-049a).
+  ipcMain.handle("top-three:writable", async () => topThree.writableWeeks());
 
-  ipcMain.handle("top-three:add", async (_event, text: string) => topThree.addOutcome(text));
+  // The optional week is the widened window reaching the client. Optional so
+  // every existing call keeps targeting the current week, and so this stays one
+  // channel rather than two (Feature 5, FR-049a).
+  ipcMain.handle("top-three:add", async (_event, text: string, week?: string) =>
+    topThree.addOutcome(text, week),
+  );
 
   ipcMain.handle("top-three:edit", async (_event, ref: OutcomeRef, text: string) =>
     topThree.editOutcome(ref, text),
@@ -350,4 +361,111 @@ export function registerTopThreeIpc(topThree: TopThreeService, hideTopThree: () 
   );
 
   ipcMain.handle("top-three:reopen", async (_event, ref: OutcomeRef) => topThree.reopenOutcome(ref));
+}
+
+/**
+ * The weekly review.
+ *
+ * Thin pass-throughs, like every other block in this file. Deliberately absent:
+ * any channel that would let the renderer decide which step comes next, whether
+ * a step may be passed, how stale something is, or how to phrase a refusal —
+ * those are core's answers and the view renders them (Principle II).
+ *
+ * Also deliberately absent: any channel that writes the inbox or sorts an item.
+ * The review reads the inbox and navigates to Feature 2's surface; it does not
+ * reimplement it (FR-016, FR-077).
+ *
+ * See specs/005-weekly-review-ritual/contracts/review-api.md
+ */
+export function registerReviewIpc(
+  review: ReviewService,
+  hideReview: () => void,
+  showSort: () => void,
+): void {
+  ipcMain.on("review:dismiss", () => hideReview());
+
+  // "Go sort them and come back." Navigation only: the sort window is Feature
+  // 2's, the review stays open on the inbox step, and returning re-invokes
+  // `review:step-inbox` for a freshly derived count.
+  ipcMain.on("review:open-sort", () => showSort());
+
+  // No raising of the vault change signal here: `FsVaultStore` raises it from
+  // its write path, so a writer that never reaches this function still reaches
+  // every open view.
+  ipcMain.handle("review:current", async () => review.current());
+  ipcMain.handle("review:start", async () => review.start());
+  ipcMain.handle("review:history", async () => review.history());
+  ipcMain.handle("review:get", async (_event, week: string) => review.get(week));
+
+  ipcMain.handle("review:step-inbox", async () => review.inboxStep());
+  ipcMain.handle("review:step-projects", async () => review.projectStep());
+  ipcMain.handle("review:step-waiting", async () => review.waitingStep());
+  ipcMain.handle("review:step-top-three", async () => review.topThreeStep());
+  ipcMain.handle("review:next-project", async () => review.nextProject());
+
+  // The recording verbs. Each is a pass-through: the decision about what may
+  // happen belongs to the service that owns the change, and none of these
+  // handlers accepts a verdict, a threshold, or a message the core did not
+  // produce.
+  ipcMain.handle(
+    "review:record-status",
+    async (
+      _event,
+      slug: string,
+      expected: ProjectStatus,
+      next: ProjectStatus,
+      opts?: { confirmOpenMilestones?: boolean },
+    ) => review.recordStatus(slug, expected, next, opts),
+  );
+  ipcMain.handle(
+    "review:record-next-action",
+    async (_event, slug: string, expected: string | null, next: string | null) =>
+      review.recordNextAction(slug, expected, next),
+  );
+  ipcMain.handle("review:record-milestone-done", async (_event, slug: string, ref: MilestoneRef) =>
+    review.recordMilestoneDone(slug, ref),
+  );
+  ipcMain.handle(
+    "review:record-milestone-added",
+    async (_event, slug: string, definitionOfDone: string, verifier: string | null) =>
+      review.recordMilestoneAdded(slug, definitionOfDone, verifier),
+  );
+  ipcMain.handle(
+    "review:record-structure",
+    async (
+      _event,
+      slug: string,
+      field: "outcome" | "dri" | "next-action",
+      expected: string | null,
+      next: string | null,
+    ) => review.recordStructure(slug, field, expected, next),
+  );
+  ipcMain.handle("review:record-no-change", async (_event, slug: string) =>
+    review.recordNoChange(slug),
+  );
+  ipcMain.handle("review:record-follow-up", async (_event, ref: WaitingRef) =>
+    review.recordFollowUp(ref),
+  );
+  ipcMain.handle("review:record-received", async (_event, ref: WaitingRef) =>
+    review.recordReceived(ref),
+  );
+  // One channel for both kinds of stale subject, matching the one verb. A
+  // second channel would be the client deciding they are different things.
+  ipcMain.handle("review:record-left", async (_event, ref: WaitingRef | { slug: string }) =>
+    review.recordLeft(ref),
+  );
+
+  ipcMain.handle("review:advance", async (_event, opts?: { confirmed?: boolean }) =>
+    review.advance(opts),
+  );
+  ipcMain.handle("review:go-to", async (_event, step: ReviewStepName) => review.goTo(step));
+
+  ipcMain.handle("review:draft-summary", async () => review.draftSummary());
+  ipcMain.handle(
+    "review:complete",
+    async (
+      _event,
+      input: { note?: string | null; summary?: { text: string; provider: string } },
+    ) => review.complete(input),
+  );
 }

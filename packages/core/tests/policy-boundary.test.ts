@@ -32,6 +32,11 @@ function sourcesIn(dir: string): { file: string; text: string }[] {
     }));
 }
 
+/** Source with block and line comments removed, so scans read code alone. */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
 /** Every module path this file imports from, however the import is spelled. */
 function importsOf(text: string): string[] {
   const found: string[] = [];
@@ -94,6 +99,79 @@ describe("policy module boundary", () => {
         }
       }
     }
+  });
+
+  test("no rule value leaks out of policy/", () => {
+    // Feature 5 added two settings, and both are the kind that get "helpfully"
+    // duplicated: a `STALENESS_DAYS = 7` beside the code that uses it, or a
+    // `gate === "block"` branch in the service that consults the gate. Either
+    // would mean two places to change one rule, and they would disagree the
+    // first time only one was edited (005 FR-078, FR-079).
+    for (const dir of ["review", "waiting", "projects", "weekly", "identity", "vault"]) {
+      for (const { file, text: source } of sourcesIn(dir)) {
+        // Comments are stripped first. A module is allowed — encouraged — to
+        // *explain* the rule it consults; what it may not do is implement one.
+        // Without this the assertion fires on prose, which teaches people to
+        // stop writing the prose.
+        const text = withoutComments(source);
+
+        assert.doesNotMatch(
+          text,
+          /stalenessDays|staleness days|inboxGate|inbox gate/,
+          `${file} names a policy setting — the rule and its threshold live in policy/`,
+        );
+        // Core *must* branch on a verdict — `allow`/`warn`/`block` is the
+        // seam's vocabulary and acting on the answer is the whole point. What
+        // it must never do is compute one: comparing a duration to a number is
+        // the staleness rule, wherever it is written.
+        // Against a *positive* number. `days < 0` is a sign check — a
+        // hand-edited file can date a transition after the day it is read, and
+        // guarding that is arithmetic, not policy. A threshold is a number
+        // someone chose, and every number someone chose is a rule.
+        assert.doesNotMatch(
+          text,
+          /\bdays?\b\s*[<>]=?\s*[1-9]/i,
+          `${file} compares a duration to a threshold — that comparison is the rule (005 FR-079)`,
+        );
+      }
+    }
+  });
+
+  test("review/ and waiting/ import nothing from Electron", () => {
+    // Principle II, checked at the only place it can be lost silently. The
+    // client renders what these modules decide; a module that reached for
+    // Electron would have moved the decision into the client's process.
+    for (const dir of ["review", "waiting"]) {
+      for (const { file, text } of sourcesIn(dir)) {
+        for (const path of importsOf(text)) {
+          assert.ok(
+            !path.includes("electron") && !path.startsWith("@waypoint/desktop"),
+            `${file} imports ${path} — core must run without a client (005 FR-086)`,
+          );
+        }
+      }
+    }
+  });
+
+  test("the summary port has exactly one call site", () => {
+    // FR-102: one interface, one place it is invoked, supplied by injection.
+    // The guard is the count, the same way T006 guards the decision points —
+    // a second call site is how "one narrow seam" quietly becomes a plugin
+    // system nobody decided to build.
+    const dirs = ["review", "waiting", "projects", "weekly", "policy", "identity", "vault", "sort", "inbox"];
+    const sites: string[] = [];
+
+    for (const dir of dirs) {
+      for (const { file, text } of sourcesIn(dir)) {
+        for (const line of text.split("\n")) {
+          // `.draft(` as a call, not the `draft(` of the interface declaration.
+          if (/\.draft\(/.test(line)) sites.push(`${file}: ${line.trim()}`);
+        }
+      }
+    }
+
+    assert.equal(sites.length, 1, `expected one call site, found:\n${sites.join("\n")}`);
+    assert.match(sites[0] ?? "", /^review\/review-service\.ts:/, "and it is at review completion");
   });
 
   test("the public surface exposes no extension-registration API", () => {

@@ -41,6 +41,82 @@ export interface Clock {
 }
 
 /**
+ * Drafts a summary of a finished week from the review's own record.
+ *
+ * A port in the same sense `TranscriptionPort` is: core owns the interface and
+ * the single call site, a client supplies the engine. **No provider ships**
+ * (005 FR-103), and none is required — the review completes normally with none
+ * supplied, offline, with no summary affordance shown at all.
+ *
+ * Two things are enforced by this signature rather than by discipline:
+ *
+ *   - **The payload boundary.** `draft` receives a `ReviewRecord` and not a
+ *     `VaultStore`, a path, or a fetcher. A provider that wanted the project
+ *     files would have to change core to get them, which is a visible change
+ *     rather than a quiet one (005 FR-108).
+ *
+ *   - **Acceptance.** Nothing here writes. What a provider returns is a
+ *     proposal; only what the caller hands back to `complete()` is recorded
+ *     (005 FR-105).
+ *
+ * Internal by intent: exported as a type so the project can use the seam
+ * deliberately, not so a third party can register against it. No loader, no
+ * discovery, no public extension API (005 FR-112).
+ *
+ * See specs/005-weekly-review-ritual/contracts/summary-port.md
+ */
+export interface SummaryProvider {
+  /** Attribution, recorded beside the text and shown before the provider runs. */
+  readonly name: string;
+  draft(record: ReviewRecord): Promise<string>;
+}
+
+/**
+ * Exactly what a provider sees: the parsed review for that week, and nothing
+ * else. No project file, inbox, identity, or policy content reaches it.
+ */
+export interface ReviewRecord {
+  week: string;
+  started: string;
+  inbox: InboxStepRecordLike | null;
+  projects: ProjectReviewRecordLike[];
+  waiting: WaitingReviewRecordLike[];
+  topThree: TopThreeStepRecordLike | null;
+  note: string | null;
+}
+
+// Structural shapes, so `ports/` describes the payload without depending on the
+// review module that owns it — the same discipline `ProjectLike` follows.
+export interface InboxStepRecordLike {
+  count: number;
+  verdict: DecisionVerdict;
+  on: string;
+}
+
+export interface ProjectReviewRecordLike {
+  slug: string;
+  action: string;
+  detail: string | null;
+  on: string;
+}
+
+export interface WaitingReviewRecordLike {
+  text: string;
+  owner: string;
+  days: number;
+  subject: "item" | "project";
+  action: string;
+  on: string;
+}
+
+export interface TopThreeStepRecordLike {
+  finished: string[];
+  slipped: string[];
+  committed: string[];
+  forWeek: string | null;
+}
+
+/**
  * Read/modify access to the inbox, for sorting.
  *
  * Distinct from `InboxStore`, which is append-only and belongs to capture.
@@ -70,8 +146,14 @@ export interface InboxDocument {
  * a path, but only the core decides which path and which bytes (Principle II).
  */
 export interface VaultStore {
-  /** Slugs of the markdown files in a vault subdirectory. Empty when absent. */
-  list(dir: "projects" | "areas"): Promise<string[]>;
+  /**
+   * Slugs of the markdown files in a vault subdirectory. Empty when absent.
+   *
+   * `log` joined the union for Feature 5: past reviews cannot be enumerated by
+   * guessing week identifiers, because only the directory knows which weeks
+   * exist. Its "slugs" are therefore week ids (005 research R12).
+   */
+  list(dir: "projects" | "areas" | "log"): Promise<string[]>;
 
   /** File contents, or null when absent. Path is vault-relative. */
   read(relPath: string): Promise<string | null>;
@@ -136,6 +218,10 @@ export const DECISION_POINTS = [
   "project.status.change",
   "project.milestone.add",
   "week.outcome.record",
+  // Feature 5 added these two, each with a rule registered against it. The
+  // count is a guard, not a limit: a point is declared when a rule needs it.
+  "review.inbox.advance",
+  "waiting.stale.check",
 ] as const;
 
 export type DecisionPoint = (typeof DECISION_POINTS)[number];
@@ -197,7 +283,46 @@ export interface OutcomeRecordContext {
   outcomeCount: number;
 }
 
-export type DecisionContext = StatusChangeContext | MilestoneAddContext | OutcomeRecordContext;
+export interface ReviewInboxAdvanceContext {
+  point: "review.inbox.advance";
+  /**
+   * Derived from the file at the moment of the attempt, never cached, so a
+   * hand-edit or a sort done mid-review is reflected (005 FR-014).
+   */
+  inboxCount: number;
+}
+
+/**
+ * One point, two subjects.
+ *
+ * A delegated item that has gone quiet and a project parked in `waiting` are
+ * the same rule applied to two things, and they share one threshold. Splitting
+ * them into two points would make separate thresholds the easy next step;
+ * keeping one means a contributor who wanted them to diverge has to change
+ * `DECISION_POINTS`, where it is visible (005 research R6).
+ */
+export interface WaitingStaleContext {
+  point: "waiting.stale.check";
+  /** For the message only. The rule and the threshold are identical for both. */
+  subject: "item" | "project";
+  /**
+   * Local date the subject was last touched: the last follow-up, or the date it
+   * started waiting; for a project, the date it entered `waiting`.
+   *
+   * A subject whose date is unknown is never asked — core does not substitute a
+   * date to make the question askable (005 FR-094).
+   */
+  since: string;
+  /** Local date today, supplied by core so the rule needs no clock of its own. */
+  today: string;
+}
+
+export type DecisionContext =
+  | StatusChangeContext
+  | MilestoneAddContext
+  | OutcomeRecordContext
+  | ReviewInboxAdvanceContext
+  | WaitingStaleContext;
 
 /**
  * A registered set of rules.

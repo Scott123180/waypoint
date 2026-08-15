@@ -54,3 +54,43 @@ function mondayBased(utcMs: number): number {
 export function isWeekId(value: string): boolean {
   return /^\d{4}-W\d{2}$/.test(value);
 }
+
+/**
+ * The Monday a week identifier names, as a local date.
+ *
+ * The inverse of `isoWeek`, and built from the same anchor it uses — 4 January
+ * is always in week 01, so the Monday of week 01 is the Monday on or before it,
+ * and every other week is a multiple of seven days from there.
+ *
+ * Local rather than UTC, so `isoWeek(weekStart(id)) === id` holds in every time
+ * zone. A UTC midnight is the previous day west of Greenwich, which would put
+ * the answer in the wrong week for anyone in the Americas.
+ */
+export function weekStart(id: WeekId): Date {
+  const [yearPart = "", weekPart = ""] = id.split("-W");
+  const year = Number(yearPart);
+  const week = Number(weekPart);
+
+  const jan4 = new Date(year, 0, 4);
+  const mondayOfWeek1 = new Date(year, 0, 4 - ((jan4.getDay() + 6) % 7));
+
+  const monday = new Date(mondayOfWeek1);
+  monday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
+  return monday;
+}
+
+/**
+ * The week after this one.
+ *
+ * Deliberately *not* `week + 1`, and deliberately not `+ 7 days` on a parsed
+ * date either. Both are wrong at a year boundary: 2026 has 53 ISO weeks, so
+ * `2026-W53` is followed by `2027-W01` rather than `2026-W54`, and a naive
+ * increment produces an identifier no parser will accept. Round-tripping
+ * through `isoWeek` means there is exactly one implementation of week
+ * arithmetic in the repo, and this is not it (research R9).
+ */
+export function nextWeek(id: WeekId): WeekId {
+  const monday = weekStart(id);
+  monday.setDate(monday.getDate() + 7);
+  return isoWeek(monday);
+}

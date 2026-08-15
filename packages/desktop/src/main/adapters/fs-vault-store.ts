@@ -28,7 +28,7 @@ export class FsVaultStore implements VaultStore {
     private readonly onChanged?: () => void,
   ) {}
 
-  async list(dir: "projects" | "areas"): Promise<string[]> {
+  async list(dir: "projects" | "areas" | "log"): Promise<string[]> {
     try {
       const entries = await readdir(join(this.vaultRoot, dir), { withFileTypes: true });
       return entries

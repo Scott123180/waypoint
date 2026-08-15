@@ -32,6 +32,13 @@ function contextFor(point: (typeof DECISION_POINTS)[number]): DecisionContext {
       return { point, project, milestoneCount: 0 };
     case "week.outcome.record":
       return { point, week: "2026-W33", outcomeCount: 0 };
+    case "review.inbox.advance":
+      // Benign means an empty inbox: the gate is about a non-empty one, and
+      // announcing an empty inbox is not something any configuration does.
+      return { point, inboxCount: 0 };
+    case "waiting.stale.check":
+      // Benign means touched today, which no threshold makes stale.
+      return { point, subject: "item", since: "2026-08-15", today: "2026-08-15" };
   }
 }
 

@@ -5,8 +5,10 @@ import {
   AreaService,
   CaptureService,
   ProjectService,
+  ReviewService,
   SortService,
   TopThreeService,
+  WaitingService,
   type InboxWriteError,
 } from "@waypoint/core";
 
@@ -22,9 +24,10 @@ import { CaptureWindow } from "./capture-window";
 import { SortWindow } from "./sort-window";
 import { ProjectsWindow } from "./projects-window";
 import { TopThreeWindow } from "./top-three-window";
+import { ReviewWindow } from "./review-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
-import { registerIpc, registerProjectsIpc, registerTopThreeIpc } from "./ipc";
+import { registerIpc, registerProjectsIpc, registerReviewIpc, registerTopThreeIpc } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray, type TrayHandle } from "./tray";
 
@@ -111,6 +114,26 @@ function start(): void {
   // sharing the store is what makes its writes raise the change signal every
   // other view already listens to.
   const topThreeService = new TopThreeService({ vault: vaultStore });
+  // The same vault store once more. `waiting.md` is written by sort today and
+  // by the review from now on, and sharing the store is what makes both writes
+  // raise the one change signal every open view listens to.
+  const waitingService = new WaitingService({ vault: vaultStore });
+
+  // The review changes nothing itself: it drives the services that already own
+  // each verb, so the same decision points fire and no behaviour exists only
+  // inside the ritual. The same vault store again, so its writes raise the
+  // change signal every other view already listens to.
+  //
+  // **No summary provider is supplied**, which is the shipped configuration:
+  // the review completes normally with none, nothing leaves the machine, and no
+  // summary affordance is shown at all (FR-103, FR-110).
+  const reviewService = new ReviewService({
+    vault: vaultStore,
+    projects: projectService,
+    topThree: topThreeService,
+    inbox: sortService,
+    waiting: waitingService,
+  });
 
   const sortWindow = new SortWindow();
   const showSort = (): void => sortWindow.show();
@@ -121,9 +144,14 @@ function start(): void {
   const topThreeWindow = new TopThreeWindow();
   const showTopThree = (): void => topThreeWindow.show();
 
-  // The sort view is the only subscriber today. Later views subscribe here too
-  // rather than each writer learning who is listening.
+  const reviewWindow = new ReviewWindow();
+  const showReview = (): void => reviewWindow.show();
+
+  // The sort view, and the review — whose inbox step reports a count it has to
+  // re-derive after the user goes and sorts. Subscribers gather here rather
+  // than each writer learning who is listening.
   inboxChanged.subscribe(() => sortWindow.inboxChanged());
+  inboxChanged.subscribe(() => reviewWindow.inboxChanged());
 
   // Both views subscribe to the same generic signal. A top-three write and a
   // project write are both "a vault file changed", and neither view needs to
@@ -131,6 +159,7 @@ function start(): void {
   // be trusted anyway.
   vaultChanged.subscribe(() => projectsWindow.vaultChanged());
   vaultChanged.subscribe(() => topThreeWindow.vaultChanged());
+  vaultChanged.subscribe(() => reviewWindow.vaultChanged());
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
@@ -138,6 +167,7 @@ function start(): void {
   );
   registerProjectsIpc(projectService, areaService, () => projectsWindow.hide());
   registerTopThreeIpc(topThreeService, () => topThreeWindow.hide());
+  registerReviewIpc(reviewService, () => reviewWindow.hide(), showSort);
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).
@@ -184,6 +214,7 @@ function start(): void {
     onSort: showSort,
     onProjects: showProjects,
     onTopThree: showTopThree,
+    onReview: showReview,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -230,6 +261,9 @@ function start(): void {
       showTopThree,
       hideTopThree: () => topThreeWindow.hide(),
       isTopThreeVisible: () => topThreeWindow.isVisible(),
+      showReview,
+      hideReview: () => reviewWindow.hide(),
+      isReviewVisible: () => reviewWindow.isVisible(),
       undoLatest,
       setStubTranscript: (text: string) => {
         stubTranscript.value = text;

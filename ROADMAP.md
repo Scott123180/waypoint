@@ -123,7 +123,7 @@ Plain-text, git-tracked, stored **outside** the application repo:
       them with Feature 3's suites passing unmodified. ISO-8601 weeks are
       computed in-repo — **Feature 5's `log/` filenames must use the same
       computation** (`packages/core/src/weekly/iso-week.ts`)
-- [ ] **Feature 5 — Weekly review ritual** (scripted: inbox must be zero,
+- [x] **Feature 5 — Weekly review ritual** (scripted: inbox must be zero,
       per-project status update, stale waiting-for check, set next week's
       top three, writes to log/YYYY-WW.md).
       **Inherits the WIP limit's pressure valve.** Feature 4 counts only `active`
@@ -132,7 +132,40 @@ Plain-text, git-tracked, stored **outside** the application repo:
       limit of meaning. Feature 4 deliberately does not solve this — the system
       cannot judge whether a block is real. The stale waiting-for check is where it
       surfaces, so that check should be understood as load-bearing for the WIP
-      limit, not only for delegation follow-up
+      limit, not only for delegation follow-up.
+      **Shipped 2026-08-15.** One file per week at `log/YYYY-Www.md`, holding the
+      review **while it is in progress and after it is finished** — there is no
+      separate state file, so a review that is interrupted resumes by being
+      re-read and one that is abandoned stays on disk saying `status: in
+      progress`. The filename uses Feature 4's `isoWeek()`, settling the
+      `YYYY-WW` sketch above in favour of the identifier.
+      **Projects gained a ledger**: an append-only `## Ledger` section written by
+      `setStatus`/`complete`/`reopen` in the same write as the `status:` line, so
+      the same change from any surface produces an identical entry. `status:`
+      stays the source of truth for what a project *is*; the ledger says how it
+      got there. No file on disk is migrated — a project gains its ledger the
+      first time an action is recorded against it. Only status changes are
+      recorded; the entry shape generalises so a later record type can carry one.
+      **Five decision points** now: the three Feature 4 declared plus
+      `review.inbox.advance` (the inbox gate, shipping as `warn` and configurable
+      to `block`) and `waiting.stale.check`. That second one is asked about
+      **both** a delegated item and a project sitting in `waiting`, through one
+      point with one `staleness days` threshold — not separately configurable, by
+      construction rather than by promise.
+      **The top-three writable window widened** from the current week to the
+      current week *and the next*, on every surface rather than only inside the
+      review: the ordinary top-three window can now set next week too. Past weeks
+      still refuse with `past-week`; two or more weeks out refuse with
+      `future-week` naming the weeks that work.
+      **A summary port ships with no provider.** `SummaryProvider` is a named
+      interface with exactly one call site at completion, supplied by injection —
+      the shape `TranscriptionPort` established. With none supplied the review
+      completes normally with no broken or disabled affordance, nothing leaves
+      the machine, and the view still shows exactly what a provider *would* be
+      sent. There is no loader, no discovery, and no registration API.
+      **Feature 6 reads these logs** as its raw material, and **Feature 8 is the
+      feature that supplies a summary provider** — the port exists so that
+      arrives as an injected argument rather than as a change to the review
 - [ ] **Feature 6 — Achievement / retrospective view** (every milestone and
       project completed within a given date range, across all projects, so
       the user can see what they actually got done — year-end reviews,

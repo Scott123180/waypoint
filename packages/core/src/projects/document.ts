@@ -1,10 +1,12 @@
 import { parseInbox } from "../inbox/parse";
+import { parseLedgerLine } from "./ledger";
 import { parseMilestone } from "./milestone";
 import {
   AREA_STATUSES,
   PROJECT_STATUSES,
   type Area,
   type AreaStatus,
+  type LedgerEntry,
   type Milestone,
   type Project,
   type ProjectStatus,
@@ -56,6 +58,7 @@ const FIELD = /^\s*([A-Za-z][A-Za-z ]*?)\s*:\s?(.*)$/;
 
 export const OUTCOME_HEADING = "Outcome";
 export const MILESTONES_HEADING = "Milestones";
+export const LEDGER_HEADING = "Ledger";
 export const UNPROCESSED_HEADING = "Unprocessed";
 
 // ---------------------------------------------------------------------------
@@ -199,6 +202,25 @@ function readUnprocessed(lines: string[]): UnprocessedItem[] {
   return items;
 }
 
+/**
+ * The ledger's entries, oldest first.
+ *
+ * A line that is not an entry is somebody else's — a note, a blank, a
+ * hand-written aside. It stays where it is and is not counted, the same rule
+ * `readMilestones` follows.
+ */
+function readLedger(lines: string[]): LedgerEntry[] {
+  const range = sectionRange(lines, LEDGER_HEADING);
+  if (!range) return [];
+
+  const entries: LedgerEntry[] = [];
+  for (let i = range.start; i < range.end; i++) {
+    const parsed = parseLedgerLine(lines[i] ?? "");
+    if (parsed) entries.push(parsed);
+  }
+  return entries;
+}
+
 function readStatus(lines: string[]): { status: ProjectStatus; raw: string } {
   const raw = readField(lines, "status") ?? "active";
   const normalized = raw.trim().toLowerCase();
@@ -220,6 +242,7 @@ export function parseProject(content: string, slug: string): Project {
     milestones: readMilestones(lines),
     completedOn: readField(lines, "completed"),
     unprocessed: readUnprocessed(lines),
+    ledger: readLedger(lines),
   };
 }
 
@@ -381,6 +404,32 @@ export function setMilestoneLines(content: string, next: string[]): string {
     for (let i = existing.length - 1; i >= next.length; i--) doc.lines.splice(existing[i]!, 1);
   }
 
+  return renderDocument(doc);
+}
+
+/**
+ * Appends one entry to `## Ledger`, creating the section on first use.
+ *
+ * The only write the ledger has. There is no counterpart that edits or removes
+ * an entry, and that absence is the append-only guarantee — not a rule applied
+ * at a call site, but a verb that does not exist (FR-091).
+ *
+ * Appends land at the end of the section's *content*, so the blank line
+ * separating it from what follows survives and the diff is exactly one line.
+ */
+export function appendLedgerLine(content: string, line: string): string {
+  const doc = parseDocument(content);
+  const range = sectionRange(doc.lines, LEDGER_HEADING);
+
+  if (!range) {
+    // Above `## Unprocessed`, so raw material from sort stays below structure.
+    insertSection(doc.lines, LEDGER_HEADING, [line]);
+    return renderDocument(doc);
+  }
+
+  let at = range.end;
+  while (at > range.start && (doc.lines[at - 1] ?? "").trim().length === 0) at -= 1;
+  doc.lines.splice(at, 0, line);
   return renderDocument(doc);
 }
 

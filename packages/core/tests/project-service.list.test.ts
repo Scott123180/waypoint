@@ -69,6 +69,12 @@ describe("ProjectSummary", () => {
     // this test was written to guarantee is still here, and the point of the
     // assertion — that a caller needs no second call to render a row — is
     // stronger now, not weaker.
+    //
+    // 2026-08-15, Feature 5 added `statusSince`, derived from the ledger beside
+    // `gaps` and `needsDri`. Additive on the same terms. Listing the whole key
+    // set rather than checking fields one by one is deliberate: it fails when
+    // the shape grows, which is how a new field gets a considered default
+    // instead of arriving unnoticed.
     assert.deepEqual(
       Object.keys(s ?? {}).sort(),
       [
@@ -80,6 +86,7 @@ describe("ProjectSummary", () => {
         "needsDri",
         "slug",
         "status",
+        "statusSince",
         "title",
       ],
     );

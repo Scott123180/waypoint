@@ -391,9 +391,25 @@ const topThreeApi = {
     return ipcRenderer.invoke("top-three:history");
   },
 
-  /** Refuses `outcome-cap` at the configured maximum. */
-  add(text: string): Promise<TopThreeResponse> {
-    return ipcRenderer.invoke("top-three:add", text);
+  /**
+   * The two weeks that may be written: this one and the next.
+   *
+   * Asked for rather than worked out. Which weeks are writable is a rule, and
+   * a renderer computing it would be a client holding one.
+   */
+  writableWeeks(): Promise<{ current: TopThreeWeek; ahead: TopThreeWeek }> {
+    return ipcRenderer.invoke("top-three:writable");
+  },
+
+  /**
+   * Refuses `outcome-cap` at the configured maximum.
+   *
+   * `week` targets the current week when omitted. The writable window is this
+   * week and the next; anything further out refuses with `future-week` and a
+   * message naming the weeks that work.
+   */
+  add(text: string, week?: string): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:add", text, week);
   },
 
   edit(ref: TopThreeRef, text: string): Promise<TopThreeResponse> {
@@ -454,6 +470,8 @@ export interface TopThreeWeek {
   id: string;
   outcomes: TopThreeOutcome[];
   current: boolean;
+  /** Whether the core will accept writes to this week. Decided there, not here. */
+  writable: boolean;
 }
 
 export interface TopThreeRef {
@@ -466,12 +484,327 @@ export type TopThreeResponse =
   | { ok: true; week: TopThreeWeek }
   | { ok: false; reason: string; message: string };
 
+export interface ReviewStepRecordShape {
+  count?: number;
+  verdict?: string;
+  on?: string;
+}
+
+export interface ReviewShape {
+  week: string;
+  started: string;
+  step: "inbox" | "projects" | "waiting" | "top-three";
+  status: "in-progress" | "complete";
+  completed: string | null;
+  inbox: { count: number; verdict: string; on: string } | null;
+  projects: { slug: string; action: string; detail: string | null; on: string }[];
+  waiting: {
+    text: string;
+    owner: string;
+    days: number;
+    subject: "item" | "project";
+    action: string;
+    on: string;
+  }[];
+  topThree: {
+    finished: string[];
+    slipped: string[];
+    committed: string[];
+    forWeek: string | null;
+  } | null;
+  note: string | null;
+  summary: { text: string; provider: string } | null;
+}
+
+export interface ReviewSummaryShape {
+  week: string;
+  started: string;
+  status: "in-progress" | "complete";
+  completed: string | null;
+}
+
+export type ReviewResponse =
+  | { ok: true; review: ReviewShape }
+  | {
+      ok: false;
+      reason: string;
+      message: string;
+      confirmable?: boolean;
+      /** The still-open milestones, when the refusal is the completion confirmation. */
+      open?: string[];
+      /** Named items to act on, when the refusal is the WIP limit. */
+      subjects?: string[];
+    };
+
+/**
+ * One project as the walk presents it.
+ *
+ * Everything here is computed by the core. The renderer decides nothing about
+ * which projects are walked, whether one is stale, how many days that is, or
+ * what to say about it — it renders `stale.reason` as the policy module worded
+ * it (FR-023, FR-025).
+ */
+export interface WalkEntryShape {
+  project: {
+    slug: string;
+    title: string;
+    status: string;
+    milestonesDone: number;
+    milestonesTotal: number;
+    gaps: string[];
+    completedOn: string | null;
+    dri: { resolution: string; raw: string | null; collidesWith?: string[] };
+    needsDri: boolean;
+    statusSince: string | null;
+  };
+  outcome: string | null;
+  nextAction: string | null;
+  milestones: {
+    index: number;
+    definitionOfDone: string;
+    verifier: string | null;
+    done: boolean;
+    completedOn: string | null;
+    raw: string;
+  }[];
+  stale: { reason: string; days: number } | null;
+  reviewed: boolean;
+}
+
+export type SummaryDraft =
+  | { available: false; failure?: string }
+  | { available: true; text: string; provider: string };
+
+/**
+ * One delegated item the staleness rule flagged.
+ *
+ * `days` is how long it has gone *untouched* — chasing it counts as touching
+ * it — while `item.since` is how long it has been outstanding in total. Both
+ * are shown, because "waiting three months, chased weekly" is a different
+ * situation from "waiting three months, never mentioned again".
+ */
+export interface StaleWaitingShape {
+  item: {
+    index: number;
+    since: string;
+    owner: string;
+    text: string;
+    actions: { kind: string; on: string }[];
+    raw: string;
+  };
+  reason: string;
+  days: number;
+}
+
+/**
+ * The weekly review.
+ *
+ * Deliberately absent: any method that decides which step comes next, whether a
+ * step may be passed, how stale something is, or how to phrase a refusal. The
+ * renderer asks and renders; every message arrives from the core.
+ */
+const reviewApi = {
+  /** The current week's review, or null when none has been started. */
+  current(): Promise<ReviewShape | null> {
+    return ipcRenderer.invoke("review:current");
+  },
+
+  /** Starts this week's review, or resumes it. Idempotent. */
+  start(): Promise<ReviewShape> {
+    return ipcRenderer.invoke("review:start");
+  },
+
+  history(): Promise<ReviewSummaryShape[]> {
+    return ipcRenderer.invoke("review:history");
+  },
+
+  get(week: string): Promise<ReviewShape | null> {
+    return ipcRenderer.invoke("review:get", week);
+  },
+
+  /**
+   * Derived from the file on every call, never cached.
+   *
+   * `notice` is the policy module's complaint about its own configuration, if
+   * it has one. Rendered as a notice, never as a refusal.
+   */
+  inboxStep(): Promise<{ count: number; notice: string }> {
+    return ipcRenderer.invoke("review:step-inbox");
+  },
+
+  /** The walk, already filtered, ordered, and flagged by the core. */
+  projectStep(): Promise<WalkEntryShape[]> {
+    return ipcRenderer.invoke("review:step-projects");
+  },
+
+  /** The first project with no record against it. Derived, never a stored cursor. */
+  nextProject(): Promise<WalkEntryShape | null> {
+    return ipcRenderer.invoke("review:next-project");
+  },
+
+  /**
+   * Outstanding items, with the quiet ones already flagged by the rule.
+   *
+   * Deliberately absent from this whole surface: anything that sends, notifies,
+   * reminds, or contacts. A follow-up is a note to self (FR-046).
+   */
+  waitingStep(): Promise<{
+    total: number;
+    stale: StaleWaitingShape[];
+    unreadable: { line: number; raw: string }[];
+  }> {
+    return ipcRenderer.invoke("review:step-waiting");
+  },
+
+  /**
+   * The reviewed week and the week ahead, both live.
+   *
+   * Reading, so it goes through the review's own channel: the step is a
+   * juxtaposition core composes — this week's outcomes beside next week's — and
+   * assembling it here from two top-three calls would put that composition in
+   * the client. Writing is the other way round; see `addOutcome` below.
+   */
+  topThreeStep(): Promise<{ reviewed: TopThreeWeek; ahead: TopThreeWeek }> {
+    return ipcRenderer.invoke("review:step-top-three");
+  },
+
+  /** Refuses `inbox-not-empty`; a `confirmable` refusal may be retried. */
+  advance(opts?: { confirmed?: boolean }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:advance", opts);
+  },
+
+  // The recording verbs. Each performs the change through the service that owns
+  // it and then records what was decided; a refusal comes back as the owning
+  // verb phrased it, WIP limit and open-milestone confirmation included.
+
+  recordStatus(
+    slug: string,
+    expected: string,
+    next: string,
+    opts?: { confirmOpenMilestones?: boolean },
+  ): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-status", slug, expected, next, opts);
+  },
+
+  recordNextAction(slug: string, expected: string | null, next: string | null): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-next-action", slug, expected, next);
+  },
+
+  recordMilestoneDone(slug: string, ref: { index: number; raw: string }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-milestone-done", slug, ref);
+  },
+
+  recordMilestoneAdded(
+    slug: string,
+    definitionOfDone: string,
+    verifier: string | null,
+  ): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-milestone-added", slug, definitionOfDone, verifier);
+  },
+
+  recordStructure(
+    slug: string,
+    field: "outcome" | "dri" | "next-action",
+    expected: string | null,
+    next: string | null,
+  ): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-structure", slug, field, expected, next);
+  },
+
+  /** "I looked at it and there is nothing to change." A decision, and recorded. */
+  recordNoChange(slug: string): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-no-change", slug);
+  },
+
+  /** Chased. The item stays outstanding and its `since` is untouched. */
+  recordFollowUp(ref: { index: number; raw: string }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-follow-up", ref);
+  },
+
+  /** Arrived. The line and its history stay in the file; nothing is deleted. */
+  recordReceived(ref: { index: number; raw: string }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-received", ref);
+  },
+
+  /** A stale subject surfaced and left. Records that it was seen; changes nothing. */
+  recordLeft(ref: { index: number; raw: string } | { slug: string }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:record-left", ref);
+  },
+
+  goTo(step: ReviewShape["step"]): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:go-to", step);
+  },
+
+  /**
+   * Opens the sort window, leaving the review where it is.
+   *
+   * Navigation, not sorting: Feature 2 owns that surface, and returning simply
+   * re-reads the count (FR-016).
+   */
+  openSort(): void {
+    ipcRenderer.send("review:open-sort");
+  },
+
+  /**
+   * The week ahead is written through the **top three's own channels**.
+   *
+   * Deliberately not `review:add-outcome`. A review-shaped wrapper would be a
+   * second path to a verb the client already has, with its own chance to drift
+   * from the cap and the writable window (contracts/review-api.md).
+   */
+  addOutcome(text: string, week: string): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:add", text, week);
+  },
+
+  completeOutcome(ref: TopThreeRef): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:complete", ref);
+  },
+
+  /** `{ available: false }` with no provider — the shipped configuration. */
+  draftSummary(): Promise<SummaryDraft> {
+    return ipcRenderer.invoke("review:draft-summary");
+  },
+
+  /** Only what is passed here is recorded. A draft is never written unasked. */
+  complete(input: {
+    note?: string | null;
+    summary?: { text: string; provider: string };
+  }): Promise<ReviewResponse> {
+    return ipcRenderer.invoke("review:complete", input);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("review:dismiss");
+  },
+
+  onRefresh(handler: () => void): void {
+    ipcRenderer.on("review:refresh", () => handler());
+  },
+
+  /** The same generic signal every other view listens to. */
+  onVaultChanged(handler: () => void): void {
+    ipcRenderer.on("vault:changed", () => handler());
+  },
+
+  /**
+   * `inbox.md` changed.
+   *
+   * The review is the second view to want this. Sorting from inside the inbox
+   * step leaves this window open, so nothing else tells it the count moved
+   * (FR-016).
+   */
+  onInboxChanged(handler: () => void): void {
+    ipcRenderer.on("inbox:changed", () => handler());
+  },
+};
+
 contextBridge.exposeInMainWorld("waypoint", {
   ...api,
   sort: sortApi,
   projects: projectsApi,
   areas: areasApi,
   topThree: topThreeApi,
+  review: reviewApi,
 });
 
 export type WaypointApi = typeof api & {
@@ -479,8 +812,10 @@ export type WaypointApi = typeof api & {
   projects: typeof projectsApi;
   areas: typeof areasApi;
   topThree: typeof topThreeApi;
+  review: typeof reviewApi;
 };
 export type WaypointSortApi = typeof sortApi;
 export type WaypointProjectsApi = typeof projectsApi;
 export type WaypointAreasApi = typeof areasApi;
 export type WaypointTopThreeApi = typeof topThreeApi;
+export type WaypointReviewApi = typeof reviewApi;

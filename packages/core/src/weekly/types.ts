@@ -27,6 +27,15 @@ export interface Week {
   outcomes: Outcome[];
   /** Whether this is the week the clock is in. Derived, never stored. */
   current: boolean;
+  /**
+   * Whether this week may be written (Feature 5, FR-049a).
+   *
+   * The window is the current week and the next one. Here rather than left to
+   * a client to work out, because "which weeks may I edit" is a rule: a
+   * renderer computing it would be a client holding one, and a later API would
+   * have to reimplement the same arithmetic to agree (Principle II).
+   */
+  writable: boolean;
 }
 
 /**
@@ -51,8 +60,22 @@ export type TopThreeRefusal =
   | "outcome-cap"
   /** Text is empty or whitespace-only (FR-005). */
   | "empty-value"
-  /** Writes target the current week only (FR-013). */
-  | "past-week";
+  /**
+   * That week is behind the writable window (FR-013).
+   *
+   * Unchanged by Feature 5's widening: a past week is a record, and the
+   * refusal is what makes it one.
+   */
+  | "past-week"
+  /**
+   * That week is beyond the writable window (Feature 5, FR-049b).
+   *
+   * The window is this week and the next, so a review run on a Friday can
+   * commit to the week ahead. Its own reason rather than a reuse of
+   * `past-week`, because the two are different mistakes and the messages have
+   * to say different things.
+   */
+  | "future-week";
 
 export type TopThreeOutcomeResult =
   | { ok: true; week: Week }

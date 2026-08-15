@@ -23,28 +23,53 @@ import { readCount } from "../vault/preamble";
  */
 
 export interface PolicyConfig {
-  /** Active projects the user may drive at once (FR-038). */
+  /** Active projects the user may drive at once (004 FR-038). */
   wipLimit: number;
-  /** Milestones per project. Feature 3's shipped constant (FR-061). */
+  /** Milestones per project. Feature 3's shipped constant (004 FR-061). */
   milestoneCap: number;
-  /** Outcomes per week (FR-063). */
+  /** Outcomes per week (004 FR-063). */
   weeklyOutcomeCap: number;
+  /**
+   * Whether a non-empty inbox stops the weekly review advancing (005 FR-017).
+   *
+   * Ships as `warn`, the opposite default from the WIP limit and deliberately
+   * so: the limit guards a commitment the user is making, while a full inbox
+   * only makes the picture incomplete — and a review that cannot start is a
+   * review that does not happen.
+   */
+  inboxGate: "warn" | "block";
+  /**
+   * How long a waiting subject may sit untouched before it is surfaced
+   * (005 FR-038).
+   *
+   * One value for both subjects — delegated items and projects parked in
+   * `waiting` — because they are the same rule applied to two things. Not
+   * separately configurable, by construction.
+   */
+  stalenessDays: number;
 }
 
 export const DEFAULT_POLICY_CONFIG: PolicyConfig = {
   wipLimit: 3,
   milestoneCap: 4,
   weeklyOutcomeCap: 3,
+  inboxGate: "warn",
+  stalenessDays: 7,
 };
 
 /** Vault-relative path. */
 export const POLICY_PATH = "policy.md";
 
-const KEYS: ReadonlyArray<{ key: string; field: keyof PolicyConfig }> = [
+/** The whole-number settings. `inbox gate` is a keyword and is read separately. */
+const COUNT_KEYS: ReadonlyArray<{ key: string; field: "wipLimit" | "milestoneCap" | "weeklyOutcomeCap" | "stalenessDays" }> = [
   { key: "wip limit", field: "wipLimit" },
   { key: "milestone cap", field: "milestoneCap" },
   { key: "weekly outcome cap", field: "weeklyOutcomeCap" },
+  { key: "staleness days", field: "stalenessDays" },
 ];
+
+const INBOX_GATE_KEY = "inbox gate";
+const INBOX_GATE_VALUES = ["warn", "block"] as const;
 
 export function parsePolicyConfig(content: string | null): PolicyConfig;
 export function parsePolicyConfig(
@@ -59,7 +84,7 @@ export function parsePolicyConfig(
   const problems: string[] = [];
 
   if (content !== null) {
-    for (const { key, field } of KEYS) {
+    for (const { key, field } of COUNT_KEYS) {
       const raw = rawValue(content, key);
       if (raw === null) continue;
 
@@ -71,6 +96,22 @@ export function parsePolicyConfig(
         continue;
       }
       config[field] = value;
+    }
+
+    // The first keyword-valued setting. Its failure is a different shape from a
+    // count's — an unrecognised word rather than a number that would not parse —
+    // so the message names the word the user typed and the words that work.
+    const rawGate = rawValue(content, INBOX_GATE_KEY);
+    if (rawGate !== null) {
+      const gate = INBOX_GATE_VALUES.find((v) => v === rawGate.toLowerCase());
+      if (gate === undefined) {
+        problems.push(
+          `"${INBOX_GATE_KEY}" is not ${INBOX_GATE_VALUES.join(" or ")} ("${rawGate}"), ` +
+            `so the default of ${DEFAULT_POLICY_CONFIG.inboxGate} applies.`,
+        );
+      } else {
+        config.inboxGate = gate;
+      }
     }
   }
 

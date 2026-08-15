@@ -42,11 +42,19 @@ export type OutcomeFields = Pick<Outcome, "text" | "done" | "completedOn">;
 // ---------------------------------------------------------------------------
 
 /** Every week in the file, in file order (newest first by convention). */
-export function parseTopThree(content: string | null): Omit<Week, "current">[] {
+/**
+ * A week as the *file* describes it.
+ *
+ * `current` and `writable` are both answers about the clock, which this module
+ * does not have. The service adds them (Feature 5 widened the pair from one).
+ */
+export type ParsedWeek = Omit<Week, "current" | "writable">;
+
+export function parseTopThree(content: string | null): ParsedWeek[] {
   if (content === null || content.length === 0) return [];
   const lines = content.split("\n");
 
-  const weeks: Omit<Week, "current">[] = [];
+  const weeks: ParsedWeek[] = [];
   let current: { id: WeekId; outcomes: Outcome[] } | null = null;
 
   for (const line of lines) {

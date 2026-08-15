@@ -1,4 +1,9 @@
 import type { Decision, DecisionContext, PolicyModule, VaultStore } from "../ports/index";
+// Calendar arithmetic, not domain logic: `vault/lists` owns the one definition
+// of a local date and the span between two of them. A second copy here would be
+// free to round differently from the one the ledger writes, and the two numbers
+// appear on the same screen.
+import { daysBetween } from "../vault/lists";
 import { POLICY_PATH, parsePolicyConfig, type PolicyConfig } from "./policy-config";
 
 /**
@@ -63,6 +68,10 @@ class DefaultPolicy implements PolicyModule {
         return this.milestoneAdd(context, config);
       case "week.outcome.record":
         return this.outcomeRecord(context, config);
+      case "review.inbox.advance":
+        return this.inboxAdvance(context, config);
+      case "waiting.stale.check":
+        return this.stale(context, config);
     }
   }
 
@@ -168,6 +177,82 @@ class DefaultPolicy implements PolicyModule {
         `A top three holds at most ${count(config.weeklyOutcomeCap, "outcome")}, ` +
         `and ${context.week} already has ${context.outcomeCount}. ` +
         "Remove one first if this matters more.",
+    };
+  }
+
+  /**
+   * The inbox gate.
+   *
+   * Ships as a `warn`, the opposite default from the WIP limit and deliberately
+   * so: the limit guards a commitment the user is making, while a full inbox
+   * only makes the picture incomplete — and a review that cannot start is a
+   * review that does not happen. A user who wants the harder version configures
+   * `inbox gate: block` (005 FR-018).
+   *
+   * An empty inbox is `allow` whichever way it is configured. The gate is about
+   * a non-empty inbox; announcing an empty one would be a message with no
+   * decision behind it (005 FR-020).
+   */
+  private inboxAdvance(
+    context: Extract<DecisionContext, { point: "review.inbox.advance" }>,
+    config: PolicyConfig,
+  ): Decision {
+    if (context.inboxCount <= 0) return ALLOW;
+
+    const waiting = `${count(context.inboxCount, "item")} ${context.inboxCount === 1 ? "is" : "are"} still in your inbox`;
+
+    if (config.inboxGate === "block") {
+      return {
+        verdict: "block",
+        reason: `${waiting}. Sort the inbox to zero before reviewing — reviewing with it full is reviewing an incomplete picture.`,
+      };
+    }
+
+    return {
+      verdict: "warn",
+      reason: `${waiting}, so this review is working from an incomplete picture. You can sort them first, or carry on.`,
+    };
+  }
+
+  /**
+   * The staleness check — one rule, asked about two kinds of subject.
+   *
+   * A delegated item nobody has chased and a project sitting in `waiting` are
+   * the same situation: something is blocked on someone else and time is
+   * passing. They share this decision point, this threshold, and this
+   * implementation, so they cannot be configured to disagree — that is
+   * structural rather than a promise (005 FR-080).
+   *
+   * `subject` reaches the wording and nothing else. Where the two differ is
+   * only in what the user can do about it: an item is chased, a project is
+   * parked.
+   *
+   * A `warn`, never a `block`. Staleness is a prompt: the review surfaces it
+   * and says nothing about what to do, and nothing here changes a byte of
+   * anything (005 FR-022b).
+   */
+  private stale(
+    context: Extract<DecisionContext, { point: "waiting.stale.check" }>,
+    config: PolicyConfig,
+  ): Decision {
+    const days = daysBetween(context.since, context.today);
+
+    // An unreadable or future date is not evidence of neglect. Core is supposed
+    // to withhold subjects whose date is unknown (FR-094); this is the same
+    // answer from the other side, so a caller that asks anyway gets silence
+    // rather than an invented complaint.
+    if (days === null || days < 0) return ALLOW;
+    if (days < config.stalenessDays) return ALLOW;
+
+    const noun = context.subject === "project" ? "This project has" : "This has";
+    const next =
+      context.subject === "project"
+        ? "Chase it, or park it until it is really moving."
+        : "Chase it, or let it go.";
+
+    return {
+      verdict: "warn",
+      reason: `${noun} been waiting ${days} ${plural(days, "day")}. ${next}`,
     };
   }
 }
