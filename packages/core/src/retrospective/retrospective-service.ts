@@ -108,9 +108,24 @@ export class RetrospectiveService {
     const detailed = await this.projects.listDetailed();
     const all = detailed.map((d) => d.project);
     const scope = narrowed === null ? all : all.filter((p) => p.slug === narrowed);
-    const { completions, undated } = selectCompletions(scope, query.range);
 
     const target = narrowed === null ? undefined : scope[0];
+
+    // A slug with no file behind it — picked from the list, then deleted in an
+    // editor before Show was pressed. Refused rather than answered emptily: an
+    // empty reading here still omits the outcome and narrative sections *with
+    // their project-scoping reasons*, so it behaves as narrowed while naming no
+    // project and carrying no history, and exports as a document claiming to
+    // cover everything (FR-046, SC-014a; see the note on `RetrospectiveRefusal`).
+    if (narrowed !== null && target === undefined) {
+      return {
+        ok: false,
+        reason: "unknown-project",
+        message: `No project in the vault has the name "${narrowed}".`,
+      };
+    }
+
+    const { completions, undated } = selectCompletions(scope, query.range);
 
     // ---- weekly outcomes --------------------------------------------------
     let outcomes: ProjectScoped<ReturnType<typeof selectOutcomes>["groups"]>;
@@ -191,9 +206,28 @@ export class RetrospectiveService {
     }
 
     const weeks: WeekNarrative[] = [];
+    // Weeks whose log actually produced content. Distinct from `present`, which
+    // records only that the *directory listed* a file: a log deleted between
+    // the listing and the read is present and unreadable, and counting it as
+    // reviewed on the strength of the listing is how such a week went missing
+    // from both sets (FR-028, SC-007).
+    const read = new Set<string>();
+
     for (const week of [...present].sort().reverse()) {
       const content = await this.vault.read(reviewPath(week));
-      if (content === null) continue;
+      if (content === null) {
+        // Surfaced by path, never silently dropped (FR-020). No raw text: there
+        // is nothing on disk left to quote. The week itself falls through to
+        // the unreviewed report, which is what the files now say about it.
+        unreadable.push({
+          path: reviewPath(week),
+          line: null,
+          raw: "",
+          reason: "unreadable-file",
+        });
+        continue;
+      }
+      read.add(week);
       const review = parseReview(content, week);
       weeks.push({
         week,
@@ -208,8 +242,11 @@ export class RetrospectiveService {
 
     return {
       weeks,
+      // Taken from what was *read*, not from what was listed, so every week
+      // overlapping the range lands in exactly one of the two sets and the
+      // accounting invariant holds by construction (SC-007).
       unreviewed: {
-        weeks: spanned.filter((w) => !present.has(w)),
+        weeks: spanned.filter((w) => !read.has(w)),
         weeksInRange: spanned.length,
       },
     };
@@ -223,8 +260,14 @@ export class RetrospectiveService {
  * there is no field into which a computed duration could be smuggled, because
  * `afterDays` is the ledger's own and is already null wherever the record is
  * silent.
+ *
+ * Exported because FR-036b asks for a reader a later feature can render on
+ * another surface *without reimplementing it*, and a module-private function is
+ * one nobody else can reach. This feature still renders it in exactly one place
+ * — the narrowed retrospective (FR-036a) — and exporting the reader does not
+ * add a second surface.
  */
-function historyOf(project: Project): ProjectHistory {
+export function historyOf(project: Project): ProjectHistory {
   return {
     slug: project.slug,
     title: project.title,

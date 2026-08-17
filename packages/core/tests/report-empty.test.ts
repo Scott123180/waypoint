@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { renderReport } from "../src/retrospective/report";
-import { range, readOk, serviceFor } from "./retro-fakes";
+import { projectFile, range, readOk, serviceFor } from "./retro-fakes";
 
 /**
  * An empty retrospective is still a report (FR-048, report-format §9).
@@ -62,14 +62,29 @@ describe("the export of an empty retrospective (T085)", () => {
     assert.ok(exported.endsWith("\n"), "a text file ends with a newline");
   });
 
+  /**
+   * **Amended 2026-08-16 (convergence T111).** This test kept its name and
+   * inverted its meaning. It narrowed to `nothing-here` — a slug with no file —
+   * and then asserted `doesNotMatch(/^Project: /m)`: the name promised the
+   * export names the project it found nothing for, which is FR-046, and the
+   * assertion required that it must not. What it actually pinned was the defect
+   * convergence found, where a narrowed report printed no `Project:` line while
+   * still omitting the outcome and narrative sections *because* it was narrowed.
+   *
+   * Narrowing to a slug with no file is now refused (see
+   * `retrospective-narrowing.test.ts`), so this tests what its name always said:
+   * a real project, nothing of it in range, named anyway.
+   */
   test("an empty narrowed retrospective names the project it found nothing for", async () => {
-    const { service } = serviceFor({});
-    const r = await readOk(service, range("2026-01-01", "2026-03-31", "nothing-here"));
+    const { service } = serviceFor({
+      "projects/shed.md": projectFile({ slug: "shed", title: "Shed rebuild" }),
+    });
+    const r = await readOk(service, range("2026-01-01", "2026-03-31", "shed"));
     const exported = renderReport(r);
 
-    // The slug matched no file, so there is no title to print — and the report
-    // says nothing was found rather than inventing a project.
     assert.match(exported, /Nothing was completed in this range\./);
-    assert.doesNotMatch(exported, /^Project: /m);
+    // Self-describing once separated from the application: an export that does
+    // not say what it was filtered to is a document overstating its own scope.
+    assert.match(exported, /^Project: Shed rebuild$/m);
   });
 });

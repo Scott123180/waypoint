@@ -430,3 +430,33 @@ what makes the checkpoints real.
   progress. Amend the "existing tests that change" section above with the reason first
 - `npm run test:core` is the fast loop; `npm run typecheck` is what catches a stray write, because the
   `Pick<>` boundary is a compile-time guarantee rather than a runtime one
+
+## Phase 10: Convergence
+
+Appended by `/speckit-converge` on 2026-08-16, after `/speckit-implement` closed Phases 1–9 and the work was
+committed. Four gaps between these artifacts and the code as it stands. No constitution violation: the four
+blocking principles (I Test-First, III Local-First, IV Plain-Text, V Separable Policy) all still hold, and the
+decision-point count is still five. Test-first ordering is preserved below — each fix is preceded by the test
+that fails on it.
+
+**F1 is the one that matters.** `readNarrative` adds a week to `present` the moment its file is *listed*, then
+`continue`s if the read comes back null. The week is then in neither set: not shown individually, not named in
+the unreviewed report, and not surfaced as unreadable. Probed against a five-week range whose `log/2026-W20.md`
+lists but reads null — 4 of 5 weeks accounted for. This is the exact invariant
+`retrospective-unreviewed.test.ts:82` asserts, and it holds in the suite only because every fixture that lists
+a log also reads one. FR-020 names a log file explicitly among what must never be silently dropped, and unlike
+the project-file race recorded in [plan.md](./plan.md) Complexity Tracking, nothing here argues against fixing
+it: `unreadable` is already in scope, already pushed to eleven lines above.
+
+- [X] T108 [P] Add a failing test in `packages/core/tests/retrospective-unreadable.test.ts` for a vault whose `list("log")` names a week its `read` returns null for, asserting the week is surfaced in `unreadable` and that `weeksInRange === weeks.length + unreviewed.weeks.length` still holds per FR-020, FR-028, SC-007 (partial)
+- [X] T109 Make `readNarrative` in `packages/core/src/retrospective/retrospective-service.ts` account for a listed-but-unreadable log — push an `UnreadableSource` and leave the week accounted for, rather than `continue` per FR-020, FR-028, SC-007 (partial)
+- [X] T110 [P] Add a failing test in `packages/core/tests/retrospective-narrowing.test.ts` for narrowing to a slug no project matches, asserting the report still states which project it was narrowed to and still renders a history section per FR-046, SC-014a (partial)
+- [X] T111 Make a narrowing whose project is absent self-describing in `packages/core/src/retrospective/retrospective-service.ts` — the report currently omits outcomes and notes for project-scoping reasons while printing no `Project:` line and no history, so it reads as unnarrowed while behaving as narrowed per FR-046, SC-014a (partial)
+- [X] T112 Verify SC-001 for real: run `npm run dev` against a 100-project vault and time opening the view to the first entry, or add an automated budget check — T103 is ticked but was satisfied by the E2E suite, which exercises the paths without measuring the ten seconds per SC-001 (missing)
+- [X] T113 [P] Export `historyOf` from `packages/core/src/retrospective/retrospective-service.ts` and `packages/core/src/index.ts` — it is module-private, so the later feature FR-036b anticipates would have to reimplement it rather than reuse it per FR-036b (partial)
+
+---
+
+**Not raised, recorded so the next reader does not re-derive it:** `weeksOverlapping` stops at `MAX_WEEKS`
+(200 × 53), so a range longer than two centuries would silently under-count weeks. Left alone — the guard is
+deliberate and documented, and the alternative to a ceiling is an unkillable loop rather than a wrong answer.

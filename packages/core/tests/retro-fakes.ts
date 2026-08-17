@@ -269,6 +269,38 @@ export function serviceFor(files: Record<string, string>): {
   return { service, vault };
 }
 
+/**
+ * A service whose `log/` listing names files its `read` cannot produce.
+ *
+ * The one case `serviceFor` cannot express, because there the listing is
+ * derived from the same map the reads come from — so a file always reads if it
+ * listed. On disk the two are separate syscalls with a gap between them, and
+ * `FsVaultStore.read` returns null on ENOENT alone: a log deleted in that gap
+ * lists and then is gone.
+ *
+ * Worth a fixture because the week is then in neither set unless the service
+ * says so — not shown with a narrative it has no content for, and not named as
+ * unreviewed either, which is how it went silently missing (006 FR-020,
+ * FR-028, SC-007).
+ */
+export function serviceWithVanishedLogs(
+  files: Record<string, string>,
+  vanished: readonly string[],
+): { service: RetrospectiveService; vault: ReadOnlyVault & CountingVault } {
+  const vault = readOnlyVault(files);
+  const wrapped: ReadOnlyVault = {
+    async list(dir) {
+      const listed = await vault.list(dir);
+      return dir === "log" ? [...listed, ...vanished].sort() : listed;
+    },
+    read: (path) => vault.read(path),
+  };
+  return {
+    service: new RetrospectiveService({ projects: projectSource(wrapped), vault: wrapped }),
+    vault,
+  };
+}
+
 /** A whole-range query, since most tests do not narrow. */
 export function range(from: string, to: string, project: string | null = null): RetrospectiveQuery {
   return { range: { from, to }, project };

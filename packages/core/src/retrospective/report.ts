@@ -5,6 +5,7 @@ import type {
   ProjectScoped,
   Narrative,
   Retrospective,
+  UnreadableReason,
   UnreadableSource,
 } from "./types";
 
@@ -77,6 +78,7 @@ export const REPORT_LABELS = {
     "These are shown as they sit on disk. Nothing here has been changed or repaired.",
   notAWeekFile: "not a week file",
   unreadableLine: "unreadable line",
+  unreadableFile: "listed but not readable",
 
   unreviewedNone: "Every one of the",
   unreviewedNoneTail: "weeks in this range was reviewed.",
@@ -112,6 +114,20 @@ export const REPORT_LABELS = {
 } as const;
 
 const SEP = " — ";
+
+/**
+ * A label per reason, exhaustively.
+ *
+ * `Record<UnreadableReason, string>` rather than a ternary: adding a reason to
+ * the union without a word for it is then a compile error rather than a report
+ * that silently prints the wrong one. The ternary this replaced would have
+ * called a vanished file an unreadable line.
+ */
+const REASON_LABELS: Record<UnreadableReason, string> = {
+  "not-a-week-file": REPORT_LABELS.notAWeekFile,
+  "unreadable-line": REPORT_LABELS.unreadableLine,
+  "unreadable-file": REPORT_LABELS.unreadableFile,
+};
 
 export function renderReport(r: Retrospective): string {
   const out: string[] = [];
@@ -305,12 +321,13 @@ function renderUnreadable(out: string[], sources: readonly UnreadableSource[]): 
     "",
     ...sources.map((s) => {
       const where = s.line === null ? s.path : `${s.path}:${s.line}`;
-      const reason =
-        s.reason === "not-a-week-file" ? REPORT_LABELS.notAWeekFile : REPORT_LABELS.unreadableLine;
+      // A file that was listed and then could not be read has no raw text to
+      // show — there is nothing on disk to quote.
+      const tail = s.raw.length === 0 ? "" : `${SEP}${s.raw}`;
       // The reason and the raw line, and nothing else. Diagnosing it is the
       // user's job in their editor; a report that guessed would be
       // editorializing about their data (FR-053).
-      return `- ${where}${SEP}${reason}${SEP}${s.raw}`;
+      return `- ${where}${SEP}${REASON_LABELS[s.reason]}${tail}`;
     }),
   ]);
 }

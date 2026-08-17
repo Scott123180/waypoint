@@ -2,7 +2,15 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { renderReport } from "../src/retrospective/report";
-import { logFile, projectFile, range, readOk, serviceFor, topThreeFile } from "./retro-fakes";
+import {
+  logFile,
+  projectFile,
+  range,
+  readOk,
+  serviceFor,
+  serviceWithVanishedLogs,
+  topThreeFile,
+} from "./retro-fakes";
 
 /**
  * Surfaced, never dropped, never repaired (FR-020).
@@ -174,5 +182,81 @@ describe("degraded sources still leave a usable reading (SC-017, T066a)", () => 
     assert.deepEqual(r.completions.map((c) => c.text), ["Good date"]);
     assert.deepEqual(r.undated.map((c) => c.rawDate), ["2026-13-45"]);
     assert.ok(r.outcomes.applies && r.outcomes.value.length === 1);
+  });
+});
+
+/**
+ * A log file that lists and then cannot be read (006 FR-020, FR-028, SC-007).
+ *
+ * `vault.list("log")` and `vault.read` are two syscalls with a gap between
+ * them, and `FsVaultStore.read` returns null on ENOENT alone — so a log deleted
+ * in that gap lists and is then gone. The week must still be accounted for.
+ * Before this was fixed it was in neither set: not shown with a narrative there
+ * was no content for, and not named in the unreviewed report either, because
+ * the *listing* had already marked it reviewed.
+ *
+ * The accounting invariant is the assertion that matters, and it is the same
+ * one `retrospective-unreviewed.test.ts` makes over ordinary fixtures. It held
+ * there only because every fixture that lists a log also reads one.
+ */
+describe("a log file that lists but cannot be read", () => {
+  const VAULT = {
+    "log/2026-W19.md": logFile({ week: "2026-W19", note: "a week I did write up" }),
+  };
+  // Listed by the directory, absent from the files above.
+  const VANISHED = ["2026-W20"];
+
+  test("leaves every week in the range accounted for", async () => {
+    const { service } = serviceWithVanishedLogs(VAULT, VANISHED);
+    const r = await readOk(service, range("2026-05-04", "2026-05-24"));
+    const n = r.narrative.applies ? r.narrative.value : null;
+    assert.ok(n, "the unnarrowed narrative applies");
+
+    assert.equal(
+      n.weeks.length + n.unreviewed.weeks.length,
+      n.unreviewed.weeksInRange,
+      "every week overlapping the range is either shown or named as unreviewed",
+    );
+  });
+
+  test("names the vanished week rather than dropping it", async () => {
+    const { service } = serviceWithVanishedLogs(VAULT, VANISHED);
+    const r = await readOk(service, range("2026-05-04", "2026-05-24"));
+    const n = r.narrative.applies ? r.narrative.value : null;
+    assert.ok(n);
+
+    // It has no readable log, so it is not shown with a narrative...
+    assert.ok(!n.weeks.some((w) => w.week === "2026-W20"));
+    // ...and what the files say now is that it has no log at all.
+    assert.ok(n.unreviewed.weeks.includes("2026-W20"));
+  });
+
+  test("surfaces it as unreadable, so it is not mistaken for a week never reviewed", async () => {
+    const { service } = serviceWithVanishedLogs(VAULT, VANISHED);
+    const r = await readOk(service, range("2026-05-04", "2026-05-24"));
+
+    const entry = r.unreadable.find((u) => u.path === "log/2026-W20.md");
+    assert.ok(entry, "the vanished log is surfaced by path (FR-020)");
+    assert.equal(entry.reason, "unreadable-file");
+    assert.equal(entry.line, null, "the whole file is the problem, not a line in it");
+  });
+
+  test("still shows the week that could be read", async () => {
+    const { service } = serviceWithVanishedLogs(VAULT, VANISHED);
+    const r = await readOk(service, range("2026-05-04", "2026-05-24"));
+    const n = r.narrative.applies ? r.narrative.value : null;
+    assert.ok(n);
+
+    const w19 = n.weeks.find((w) => w.week === "2026-W19");
+    assert.ok(w19, "one unreadable file does not cost the rest of the range (FR-063)");
+    assert.equal(w19.note, "a week I did write up");
+  });
+
+  test("the rendered report says both things", async () => {
+    const { service } = serviceWithVanishedLogs(VAULT, VANISHED);
+    const text = renderReport(await readOk(service, range("2026-05-04", "2026-05-24")));
+
+    assert.match(text, /2026-W20/, "named in the unreviewed report");
+    assert.match(text, /log\/2026-W20\.md/, "and again under Could not be read");
   });
 });

@@ -69,8 +69,18 @@ The only verb. One call answers one question completely.
 |---|---|---|
 | `invalid-date` | Either endpoint is not `YYYY-MM-DD` | which endpoint, and the expected form |
 | `range-inverted` | `to < from` as string comparison | both dates, and that the end precedes the start |
+| `unknown-project` | Narrowed to a slug no project file matches | the name that was asked for |
 
 `invalid-date` is checked first, so an inverted comparison is never performed on a value that is not a date.
+
+> **Amended 2026-08-16 (convergence T111).** `unknown-project` was added; this contract previously listed two
+> refusals and said a slug with no file yielded an empty reading. That reading produced an incoherent report:
+> the outcome and narrative sections were still omitted *with their project-scoping reasons*, so it behaved as
+> narrowed, while the header printed no `Project:` line and no history section appeared — an export claiming to
+> cover everything while showing one project's worth of nothing (FR-046, SC-014a). FR-034's "narrowed project
+> with no completions in range" governs a project that exists, which still reports plainly and is not refused.
+> The first two refusals are checked before anything is read; this one is checked after the single project
+> listing, because knowing whether the slug matches requires it.
 
 **On success, guarantees:**
 

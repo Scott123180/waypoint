@@ -99,15 +99,29 @@ describe("sections a project does not have", () => {
 });
 
 describe("edges", () => {
-  test("a slug with no file yields an empty reading, not a refusal (FR-034)", async () => {
+  /**
+   * **Amended 2026-08-16 (convergence T111).** This test used to assert the
+   * opposite — "a slug with no file yields an empty reading, not a refusal
+   * (FR-034)" — and asserted `history === null` and `projectTitle === null`
+   * alongside it. Those two nulls *were* the defect, asserted as though they
+   * were the design: the outcome and narrative sections are still omitted with
+   * their project-scoping reasons on that path, so the report behaved as
+   * narrowed while naming no project and carrying no history, and exported as a
+   * document claiming to cover everything (FR-046, SC-014a).
+   *
+   * FR-034 governs a narrowed *project* with no completions in range — a real
+   * one, reported plainly, which the test below still covers. A slug with no
+   * file behind it is a different thing and is refused, as FR-003 refuses an
+   * inverted range.
+   */
+  test("a slug with no file is refused rather than answered emptily", async () => {
     const { service } = serviceFor(VAULT);
     const result = await service.read(range("2026-01-01", "2026-12-31", "no-such-project"));
 
-    assert.equal(result.ok, true);
-    if (!result.ok) return;
-    assert.deepEqual(result.retrospective.completions, []);
-    assert.equal(result.retrospective.history, null);
-    assert.equal(result.retrospective.projectTitle, null);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.reason, "unknown-project");
+    assert.match(result.message, /no-such-project/);
   });
 
   test("a project with no completions in range says so plainly", async () => {
@@ -141,5 +155,58 @@ describe("history is scoped to the filter (FR-036a, SC-014a)", () => {
 
     assert.equal(r.history, null);
     assert.doesNotMatch(renderReport(r), /## Project history/);
+  });
+});
+
+/**
+ * Narrowing to a project that is not there (006 FR-046, SC-014a).
+ *
+ * Reachable in the ordinary way: the picker is filled when the window opens,
+ * and a project deleted in vim between then and pressing Show is a slug with no
+ * file behind it.
+ *
+ * The failure it replaces was quiet. The sections that have no meaning under a
+ * filter were still omitted with their project-scoping reasons — so the report
+ * behaved as narrowed — while the header printed no `Project:` line and no
+ * history section appeared, so it read as unnarrowed. An export of that is a
+ * document claiming to cover everything while showing one project's worth of
+ * nothing.
+ *
+ * Refusing is the same answer FR-003 gives an inverted range: name the problem,
+ * show no report. Inventing a title from the slug, or printing an empty history
+ * for a project that does not exist, would both be the reader deciding what the
+ * files should have said.
+ */
+describe("narrowing to a project that does not exist", () => {
+  test("is refused, naming the project rather than showing an empty report", async () => {
+    const { service } = serviceFor(VAULT);
+    const result = await service.read(range("2026-01-01", "2026-12-31", "shed"));
+
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.reason, "unknown-project");
+    assert.match(result.message, /shed/, "the refusal names what was asked for");
+  });
+
+  test("is distinct from a project that exists and has nothing in range", async () => {
+    const { service } = serviceFor(VAULT);
+    // `roof` is real; this range simply contains none of its completions. That
+    // is a report saying so plainly, not a refusal (FR-034).
+    const r = await readOk(service, range("2020-01-01", "2020-12-31", "roof"));
+
+    assert.equal(r.completions.length, 0);
+    assert.equal(r.projectTitle, "Roof repair", "a real narrowing still names itself");
+    assert.ok(r.history, "and still carries a history section (SC-014a)");
+    assert.match(renderReport(r), /Nothing was completed in this range\./);
+  });
+
+  test("every narrowing that produces a report states which project", async () => {
+    const { service } = serviceFor(VAULT);
+    for (const slug of ["roof", "fence"]) {
+      const r = await readOk(service, range("2026-01-01", "2026-12-31", slug));
+      assert.ok(r.projectTitle, `${slug} names itself`);
+      assert.match(renderReport(r), /^Project: /m);
+      assert.ok(r.history, "a narrowed report always has a history section (SC-014a)");
+    }
   });
 });

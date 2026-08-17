@@ -159,7 +159,7 @@ export type {
  * commitment — and cannot write: its dependencies are narrowed so that no write
  * verb is reachable from it (006 FR-051, FR-058).
  */
-export { RetrospectiveService } from "./retrospective/retrospective-service";
+export { RetrospectiveService, historyOf } from "./retrospective/retrospective-service";
 export type {
   RetrospectiveServiceDeps,
   ProjectSource,

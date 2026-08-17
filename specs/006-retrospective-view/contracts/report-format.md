@@ -293,7 +293,21 @@ file, the `reason` verbatim from `UnreadableSource`, and the raw text exactly as
 file in `log/` whose name is not a week identifier is reported here rather than parsed as a week or silently
 skipped (research R4).
 
-**The report never guesses why.** `reason` is one of the two fixed values the type allows, and nothing
+> **Amended 2026-08-16 (convergence T109).** A third `reason` was added: `unreadable-file`, rendered as
+> `listed but not readable`, for a file the directory listed that the read could not produce — `list` and
+> `read` are two syscalls, and `FsVaultStore.read` returns null on ENOENT alone, so a log deleted in the gap
+> lists and is then gone. It prints with no raw text, because there is nothing left on disk to quote:
+>
+> ```text
+> - log/2026-W20.md — listed but not readable
+> ```
+>
+> Before this, such a file was skipped and the week it stood for was counted as reviewed on the strength of
+> the listing alone — so it appeared neither individually nor in the unreviewed report, which FR-020, FR-028,
+> and SC-007 all forbid. The week is now named in the unreviewed report, which is what the files say once the
+> log is gone, and the entry here is what distinguishes it from a week that was simply never reviewed.
+
+**The report never guesses why.** `reason` is one of the fixed values the type allows, and nothing
 speculates about the cause — no "missing date?", no "did you mean". Diagnosing the line is the user's job in
 their editor, and a report that guessed would be editorializing about the user's data, which §10's fourth
 invariant and FR-053 both forbid. This paragraph exists because an earlier draft of this contract carried

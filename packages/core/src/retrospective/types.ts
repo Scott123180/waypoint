@@ -191,7 +191,17 @@ export type UnreadableReason =
   /** A file in `log/` whose name is not a week identifier — a hand-made copy. */
   | "not-a-week-file"
   /** A line in an in-range week section that is not blank, a heading, or an outcome. */
-  | "unreadable-line";
+  | "unreadable-line"
+  /**
+   * A file the directory listed that the read could not produce.
+   *
+   * `list` and `read` are two syscalls with a gap between them, and
+   * `FsVaultStore.read` returns null on ENOENT alone — so this is a file
+   * deleted in that gap. Named rather than skipped, because the week it stands
+   * for would otherwise be counted as reviewed by the listing and shown by
+   * nothing (FR-020, FR-028).
+   */
+  | "unreadable-file";
 
 export interface Retrospective {
   /** Echoed back, so an export separated from the app still says what it covers (FR-010). */
@@ -218,15 +228,29 @@ export interface Retrospective {
 /**
  * Why a retrospective verb refused. Refusals are values a caller renders.
  *
- * There is deliberately no `not-found`: narrowing to a slug with no file yields
- * an empty reading, not an error. A project the user picked from a list and
- * which then vanished is an empty answer (FR-034).
+ * **Amended 2026-08-16 (convergence T111).** This type previously carried a note
+ * saying there was deliberately no not-found case, because "a project the user
+ * picked from a list and which then vanished is an empty answer (FR-034)". That
+ * reading was wrong, and the reading it produced was incoherent: the sections
+ * with no meaning under a filter were still omitted *with their project-scoping
+ * reasons*, so the report behaved as narrowed, while the header printed no
+ * `Project:` line and no history section appeared, so it read as unnarrowed.
+ * Exported, that is a document claiming to cover everything while showing one
+ * project's worth of nothing — which FR-046 and SC-014a both forbid.
+ *
+ * FR-034's subject is "a narrowed *project*" with no completions in range: a
+ * real project, and an empty report saying so plainly. A slug with no file
+ * behind it is not that, and treating the two alike is what hid the difference.
+ * So this refuses, exactly as FR-003 refuses an inverted range — name the
+ * problem, show no report.
  */
 export type RetrospectiveRefusal =
   /** An endpoint is not a `YYYY-MM-DD` local calendar date. */
   | "invalid-date"
   /** `to` is earlier than `from` (FR-003). */
-  | "range-inverted";
+  | "range-inverted"
+  /** Narrowed to a slug no project file matches (FR-046, SC-014a). */
+  | "unknown-project";
 
 export type RetrospectiveResult =
   | { ok: true; retrospective: Retrospective }
