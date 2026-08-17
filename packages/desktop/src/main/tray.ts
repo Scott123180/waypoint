@@ -24,6 +24,7 @@ export interface TrayActions {
   onProjects: () => void;
   onTopThree: () => void;
   onReview: () => void;
+  onRetrospective: () => void;
 }
 
 /**
@@ -51,6 +52,7 @@ export function createTray(actions: TrayActions): TrayHandle | undefined {
         { label: "Projects", click: actions.onProjects },
         { label: "Top three", click: actions.onTopThree },
         { label: "Weekly review", click: actions.onReview },
+        { label: "Retrospective", click: actions.onRetrospective },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },
       ]);

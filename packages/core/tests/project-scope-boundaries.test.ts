@@ -83,12 +83,26 @@ describe("no review or network interface, and no limit outside policy (FR-049)",
     });
   }
 
+  /**
+   * Amended 2026-08-16, when Feature 6 shipped the retrospective.
+   *
+   * `retrospective` was forbidden here because, at the time this was written,
+   * the retrospective view was a *later* feature and an export named for it
+   * would have meant Feature 3 had grown into work it had not been scoped for.
+   * That is no longer what such an export means: Feature 6 exists, and
+   * `RetrospectiveService` is its surface arriving on schedule rather than
+   * Feature 3 overreaching.
+   *
+   * `httpserver` stays. Feature 7 has not shipped, so the guard still guards
+   * something. The pattern shrinks as features land, and each removal is dated
+   * so the next reader can tell a deliberate amendment from an erosion.
+   */
   test("the package exports nothing named for a still-later feature", () => {
     const exported = Object.keys(core);
     for (const name of exported) {
       assert.doesNotMatch(
         name,
-        /weeklyreview|retrospective|httpserver/i,
+        /weeklyreview|httpserver/i,
         `${name} is out of scope for this feature`,
       );
     }

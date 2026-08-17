@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'"
+    />
+    <title>Retrospective</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1c1c1e;
+        --dim: #6b6b70;
+        --bg: #ffffff;
+        --line: #d8d8dc;
+        --accent: #0a5;
+        --notice-bg: #fff6d8;
+        --notice-fg: #6b4e00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #e8e8ea;
+          --dim: #9a9aa0;
+          --bg: #1c1c1e;
+          --line: #3a3a3e;
+          --notice-bg: #4a3c10;
+          --notice-fg: #ffe9a8;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      header {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      #notice {
+        display: none;
+        padding: 7px 16px;
+        background: var(--notice-bg);
+        color: var(--notice-fg);
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+        align-items: center;
+        gap: 10px;
+      }
+      #notice.shown {
+        display: flex;
+      }
+      #notice button {
+        background: transparent;
+        border-color: currentColor;
+        color: inherit;
+        font-size: 11px;
+        padding: 2px 8px;
+      }
+      main {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+      }
+      /*
+        The report is one string, rendered by the core. It is shown as
+        pre-wrapped text rather than parsed into elements, because parsing it
+        would be a second rendering — and the whole design turns on there being
+        exactly one (006 research R2).
+      */
+      #report {
+        margin: 0;
+        white-space: pre-wrap;
+        font: 12.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      #empty {
+        color: var(--dim);
+        font-style: italic;
+      }
+      footer {
+        padding: 9px 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      #status {
+        color: var(--dim);
+        font-size: 11px;
+        margin-left: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <label>From<input type="date" id="from" /></label>
+      <label>To<input type="date" id="to" /></label>
+      <label>
+        Project
+        <select id="project">
+          <option value="">Everything</option>
+        </select>
+      </label>
+      <button id="run">Show</button>
+    </header>
+
+    <div id="notice">
+      <span>The data changed since this was read.</span>
+      <button id="reread">Re-read</button>
+      <button id="dismiss-notice">Keep this one</button>
+    </div>
+
+    <main>
+      <p id="empty">Pick a start and end date, then choose Show.</p>
+      <pre id="report" hidden></pre>
+    </main>
+
+    <footer>
+      <button id="copy" disabled>Copy</button>
+      <button id="save" disabled>Save as…</button>
+      <span id="status"></span>
+    </footer>
+
+    <script src="./retrospective.js"></script>
+  </body>
+</html>

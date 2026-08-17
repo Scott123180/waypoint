@@ -1,4 +1,7 @@
-import { ipcMain } from "electron";
+import { clipboard, dialog, ipcMain } from "electron";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
 
 import {
   CaptureService,
@@ -12,6 +15,9 @@ import {
   type ProjectService,
   type ProjectStatus,
   type OutcomeRef,
+  type Retrospective,
+  type RetrospectiveQuery,
+  type RetrospectiveService,
   type ReviewService,
   type ReviewStepName,
   type SortDecision,
@@ -19,6 +25,8 @@ import {
   type TopThreeService,
   type WaitingRef,
 } from "@waypoint/core";
+
+import { renderReport } from "@waypoint/core";
 
 import { toWhisperWav } from "./audio-encode";
 import type { CaptureWindow } from "./capture-window";
@@ -469,3 +477,67 @@ export function registerReviewIpc(
     ) => review.complete(input),
   );
 }
+
+/**
+ * The retrospective.
+ *
+ * Four channels, and the shape of them is the point.
+ *
+ * `retrospective:render` exists so the renderer never renders. The window could
+ * hold the structured value and format it itself, and that is precisely the
+ * second rendering path the design exists to prevent — with two renderers,
+ * "the export matches the view" becomes a property two pieces of code have to
+ * maintain in step forever instead of an identity (006 research R2).
+ *
+ * Deliberately absent: any channel that writes. There is none to add — the
+ * service's dependencies are narrowed so that no write verb is reachable from
+ * it — and the export deliberately lands outside the vault, because a
+ * retrospective that wrote into the data directory would stop being a reader
+ * (FR-049, FR-051).
+ *
+ * There is also no `retrospective:refresh`. Re-reading is `retrospective:read`
+ * called again with the same query; a separate channel would be a second way to
+ * do one thing, and would tempt someone into making it automatic.
+ *
+ * See specs/006-retrospective-view/contracts/retrospective-api.md
+ */
+export function registerRetrospectiveIpc(
+  retrospective: RetrospectiveService,
+  hideRetrospective: () => void,
+): void {
+  ipcMain.on("retrospective:dismiss", () => hideRetrospective());
+
+  ipcMain.handle("retrospective:read", async (_event, query: RetrospectiveQuery) =>
+    retrospective.read(query),
+  );
+
+  ipcMain.handle("retrospective:render", async (_event, value: Retrospective) =>
+    renderReport(value),
+  );
+
+  ipcMain.handle("retrospective:copy", async (_event, text: string) => {
+    clipboard.writeText(text);
+    return { ok: true as const };
+  });
+
+  ipcMain.handle(
+    "retrospective:save",
+    async (_event, text: string, suggestedName: string): Promise<SaveResponse> => {
+      const result = await dialog.showSaveDialog({
+        // The user's documents directory, never the vault. An export written
+        // into the data directory would make this feature a writer, and would
+        // put a derived file where every other file is a source (FR-049).
+        defaultPath: join(homedir(), "Documents", suggestedName),
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+
+      // Cancelling is not an error. It is the user changing their mind.
+      if (result.canceled || !result.filePath) return { saved: false };
+
+      await writeFile(result.filePath, text, "utf8");
+      return { saved: true, path: result.filePath };
+    },
+  );
+}
+
+export type SaveResponse = { saved: true; path: string } | { saved: false };

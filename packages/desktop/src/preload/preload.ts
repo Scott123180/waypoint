@@ -798,6 +798,56 @@ const reviewApi = {
   },
 };
 
+
+/**
+ * The retrospective.
+ *
+ * No write verb crosses this bridge, because there is none to cross: the core
+ * service's dependencies are narrowed so no write is reachable from it.
+ *
+ * `render` goes to main rather than being done here, deliberately. The window
+ * holds a `Retrospective` and could format it itself — and that second
+ * rendering path is exactly what would turn "the export is what I was looking
+ * at" from an identity into two pieces of code that must agree forever
+ * (006 research R2).
+ *
+ * `onChanged` is a *notice*, not a refresh. Everything else in this app
+ * re-reads on a vault change; this one tells the user and waits, because
+ * entries moving under them mid-read breaks the copy in their clipboard
+ * (FR-010a, FR-010b).
+ */
+const retrospectiveApi = {
+  read(query: RetrospectiveQueryShape): Promise<unknown> {
+    return ipcRenderer.invoke("retrospective:read", query);
+  },
+
+  render(retrospective: unknown): Promise<string> {
+    return ipcRenderer.invoke("retrospective:render", retrospective);
+  },
+
+  copy(text: string): Promise<{ ok: true }> {
+    return ipcRenderer.invoke("retrospective:copy", text);
+  },
+
+  save(text: string, suggestedName: string): Promise<{ saved: boolean; path?: string }> {
+    return ipcRenderer.invoke("retrospective:save", text, suggestedName);
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("retrospective:dismiss");
+  },
+
+  /** A write landed somewhere in the vault. The fact, never the cause. */
+  onChanged(handler: () => void): void {
+    ipcRenderer.on("retrospective:changed", () => handler());
+  },
+};
+
+export interface RetrospectiveQueryShape {
+  range: { from: string; to: string };
+  project: string | null;
+}
+
 contextBridge.exposeInMainWorld("waypoint", {
   ...api,
   sort: sortApi,
@@ -805,6 +855,7 @@ contextBridge.exposeInMainWorld("waypoint", {
   areas: areasApi,
   topThree: topThreeApi,
   review: reviewApi,
+  retrospective: retrospectiveApi,
 });
 
 export type WaypointApi = typeof api & {
@@ -813,9 +864,11 @@ export type WaypointApi = typeof api & {
   areas: typeof areasApi;
   topThree: typeof topThreeApi;
   review: typeof reviewApi;
+  retrospective: typeof retrospectiveApi;
 };
 export type WaypointSortApi = typeof sortApi;
 export type WaypointProjectsApi = typeof projectsApi;
 export type WaypointAreasApi = typeof areasApi;
 export type WaypointTopThreeApi = typeof topThreeApi;
 export type WaypointReviewApi = typeof reviewApi;
+export type WaypointRetrospectiveApi = typeof retrospectiveApi;

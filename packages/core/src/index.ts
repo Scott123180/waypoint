@@ -151,3 +151,36 @@ export type {
   DestinationRef,
   RecoveryReport,
 } from "./sort/decision";
+
+/**
+ * The retrospective: a reader over what Features 3, 4, and 5 already record.
+ *
+ * Adds no decision point and consults none — a date range is a question, not a
+ * commitment — and cannot write: its dependencies are narrowed so that no write
+ * verb is reachable from it (006 FR-051, FR-058).
+ */
+export { RetrospectiveService } from "./retrospective/retrospective-service";
+export type {
+  RetrospectiveServiceDeps,
+  ProjectSource,
+} from "./retrospective/retrospective-service";
+export { renderReport, REPORT_LABELS } from "./retrospective/report";
+export type {
+  DateRange,
+  RetrospectiveQuery,
+  Retrospective,
+  RetrospectiveResult,
+  RetrospectiveRefusal,
+  Completion,
+  CompletionKind,
+  OutcomeCompletion,
+  OutcomeWeekGroup,
+  Narrative,
+  WeekNarrative,
+  UnreviewedWeeks,
+  ProjectScoped,
+  ProjectHistory,
+  UnreadableSource,
+  UnreadableReason,
+} from "./retrospective/types";
+export { weekEnd } from "./weekly/iso-week";

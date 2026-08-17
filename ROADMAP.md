@@ -166,7 +166,7 @@ Plain-text, git-tracked, stored **outside** the application repo:
       **Feature 6 reads these logs** as its raw material, and **Feature 8 is the
       feature that supplies a summary provider** — the port exists so that
       arrives as an injected argument rather than as a change to the review
-- [ ] **Feature 6 — Achievement / retrospective view** (every milestone and
+- [x] **Feature 6 — Achievement / retrospective view** (every milestone and
       project completed within a given date range, across all projects, so
       the user can see what they actually got done — year-end reviews,
       performance conversations, 1:1s. Reads the completion dates Feature 3

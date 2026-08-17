@@ -5,6 +5,7 @@ import {
   AreaService,
   CaptureService,
   ProjectService,
+  RetrospectiveService,
   ReviewService,
   SortService,
   TopThreeService,
@@ -25,9 +26,16 @@ import { SortWindow } from "./sort-window";
 import { ProjectsWindow } from "./projects-window";
 import { TopThreeWindow } from "./top-three-window";
 import { ReviewWindow } from "./review-window";
+import { RetrospectiveWindow } from "./retrospective-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
-import { registerIpc, registerProjectsIpc, registerReviewIpc, registerTopThreeIpc } from "./ipc";
+import {
+  registerIpc,
+  registerProjectsIpc,
+  registerRetrospectiveIpc,
+  registerReviewIpc,
+  registerTopThreeIpc,
+} from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
 import { createTray, type TrayHandle } from "./tray";
 
@@ -135,6 +143,14 @@ function start(): void {
     waiting: waitingService,
   });
 
+  // Reads three sources and writes none. Its dependencies are narrowed so that
+  // no write verb is reachable from it — `projectService` arrives as a source of
+  // `listDetailed` alone, and the vault as `list` and `read` (006 FR-051).
+  const retrospectiveService = new RetrospectiveService({
+    projects: projectService,
+    vault: vaultStore,
+  });
+
   const sortWindow = new SortWindow();
   const showSort = (): void => sortWindow.show();
 
@@ -146,6 +162,9 @@ function start(): void {
 
   const reviewWindow = new ReviewWindow();
   const showReview = (): void => reviewWindow.show();
+
+  const retrospectiveWindow = new RetrospectiveWindow();
+  const showRetrospective = (): void => retrospectiveWindow.show();
 
   // The sort view, and the review — whose inbox step reports a count it has to
   // re-derive after the user goes and sorts. Subscribers gather here rather
@@ -160,6 +179,11 @@ function start(): void {
   vaultChanged.subscribe(() => projectsWindow.vaultChanged());
   vaultChanged.subscribe(() => topThreeWindow.vaultChanged());
   vaultChanged.subscribe(() => reviewWindow.vaultChanged());
+  // The retrospective subscribes to the same signal and does something
+  // different with it: the other views re-read, this one raises a notice and
+  // waits. A reading is an answer taken at a moment, and re-rendering it under
+  // the user would break the copy in their clipboard (006 FR-010a).
+  vaultChanged.subscribe(() => retrospectiveWindow.vaultChanged());
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
@@ -168,6 +192,7 @@ function start(): void {
   registerProjectsIpc(projectService, areaService, () => projectsWindow.hide());
   registerTopThreeIpc(topThreeService, () => topThreeWindow.hide());
   registerReviewIpc(reviewService, () => reviewWindow.hide(), showSort);
+  registerRetrospectiveIpc(retrospectiveService, () => retrospectiveWindow.hide());
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).
@@ -215,6 +240,7 @@ function start(): void {
     onProjects: showProjects,
     onTopThree: showTopThree,
     onReview: showReview,
+    onRetrospective: showRetrospective,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -262,6 +288,7 @@ function start(): void {
       hideTopThree: () => topThreeWindow.hide(),
       isTopThreeVisible: () => topThreeWindow.isVisible(),
       showReview,
+      showRetrospective,
       hideReview: () => reviewWindow.hide(),
       isReviewVisible: () => reviewWindow.isVisible(),
       undoLatest,

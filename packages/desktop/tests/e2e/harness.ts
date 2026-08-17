@@ -49,6 +49,9 @@ export interface Harness {
   /** Opens the weekly review, as the tray entry does. Never opened for the user. */
   openReview(): Promise<void>;
   reviewView(): Promise<Page>;
+  /** Opens the retrospective, as the tray entry does. Never opened for the user. */
+  openRetrospective(): Promise<void>;
+  retrospectiveView(): Promise<Page>;
   /** Hides it, as closing the window does. Reopening re-reads from disk. */
   closeProjects(): Promise<void>;
   isProjectsVisible(): Promise<boolean>;
@@ -298,6 +301,22 @@ export async function launch(
         return el !== null && (el.textContent ?? "").length > 0;
       });
       await new Promise((r) => setTimeout(r, 150));
+    },
+    async openRetrospective() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showRetrospective();
+      });
+      const view = await harness.retrospectiveView();
+      // It reads nothing on open, so the thing to wait for is the controls
+      // being present — not any content, of which there is deliberately none.
+      await view.waitForSelector("#run");
+      return undefined;
+    },
+    async retrospectiveView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("retrospective.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("retrospective.html"));
     },
     async reviewView() {
       for (const page of app.windows()) {

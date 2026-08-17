@@ -80,6 +80,23 @@ export function weekStart(id: WeekId): Date {
 }
 
 /**
+ * The Sunday a week identifier ends on, as a local date.
+ *
+ * `weekStart` plus six days, and here rather than in the one module that needs
+ * it for the reason `daysBetween` states about itself: one definition, because
+ * two would disagree. Week arithmetic has exactly one home, and a three-line
+ * copy elsewhere is the kind that is tempting to write and impossible to spot.
+ *
+ * Added by Feature 6, which shows each week's span beside its identifier so a
+ * week only partly inside a date range is legible as such (006 FR-028).
+ */
+export function weekEnd(id: WeekId): Date {
+  const sunday = weekStart(id);
+  sunday.setDate(sunday.getDate() + 6);
+  return sunday;
+}
+
+/**
  * The week after this one.
  *
  * Deliberately *not* `week + 1`, and deliberately not `+ 7 days` on a parsed
