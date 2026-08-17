@@ -29,6 +29,17 @@ export interface Harness {
   undoableId(): Promise<string | undefined>;
   captureBox(): Promise<Page>;
   isBoxVisible(): Promise<boolean>;
+  /**
+   * Drives what a click on any other window drives.
+   *
+   * Calls the blur handler rather than blurring the window, because focus is
+   * the window manager's to give and a test runner has none — `BrowserWindow`
+   * here is never focused, so `blur()` is silently a no-op. Same reason
+   * `trigger()` calls the hotkey's handler instead of pressing the hotkey.
+   */
+  blurBox(): Promise<void>;
+  /** Whether main believes dictation is in flight — what pins the box open. */
+  isBoxDictating(): Promise<boolean>;
   inbox(): string;
   /** Seeds inbox.md directly, the way capture or a hand-edit would. */
   writeInbox(content: string): void;
@@ -190,6 +201,19 @@ export async function launch(
     async isBoxVisible() {
       return app.evaluate(() => {
         return (globalThis as Record<string, any>)["__waypoint"].isCaptureVisible();
+      });
+    },
+    async blurBox() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].blurCapture();
+      });
+      // The handler is synchronous, but a hide has to make it back through the
+      // window manager before it is observable.
+      await new Promise((r) => setTimeout(r, 250));
+    },
+    async isBoxDictating() {
+      return app.evaluate(() => {
+        return (globalThis as Record<string, any>)["__waypoint"].isCaptureDictating();
       });
     },
     async undo() {

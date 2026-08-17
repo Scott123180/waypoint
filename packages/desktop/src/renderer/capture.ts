@@ -26,6 +26,7 @@ interface WaypointApi {
   undo(id: string): Promise<{ ok: boolean; reason?: string }>;
   ackNotice(id: string): void;
   dismiss(): void;
+  dictating(active: boolean): void;
   onReset(callback: (mode: CaptureMode) => void): void;
   onStartDictation(callback: () => void): void;
   onNotice(callback: (notice: Notice) => void): void;
@@ -130,8 +131,27 @@ const HINTS: Record<DictationState, string> = {
 let state: DictationState = "idle";
 let elapsedTimer: number | undefined;
 
+/** What main has been told, so an unchanged state is not re-sent. */
+let reportedDictating = false;
+
+/**
+ * Tells main whether dictation is in flight.
+ *
+ * Every non-idle state counts, not only `recording`. `acquiring` may already
+ * have an open microphone by the time the box goes away, and a box hidden while
+ * `transcribing` loses the arriving transcript to the next `capture:reset` —
+ * the same defect one state along.
+ */
+function reportDictating(next: DictationState): void {
+  const active = next !== "idle";
+  if (active === reportedDictating) return;
+  reportedDictating = active;
+  window.waypoint.dictating(active);
+}
+
 function setState(next: DictationState): void {
   state = next;
+  reportDictating(next);
   status.dataset["state"] = next;
   statusLabel.textContent = LABELS[next];
   hint.textContent = HINTS[next];

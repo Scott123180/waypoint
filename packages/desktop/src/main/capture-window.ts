@@ -20,6 +20,12 @@ export class CaptureWindow {
   private window: BrowserWindow | undefined;
   private readonly notices = new NoticeQueue();
 
+  /**
+   * Dictation is in flight: the microphone is open, or a transcript is still on
+   * its way back. Reported by the renderer, which owns the state machine.
+   */
+  private dictating = false;
+
   create(): void {
     const window = new BrowserWindow({
       width: 620,
@@ -44,10 +50,30 @@ export class CaptureWindow {
     // Reaching the box from a fullscreen app must not force a Space switch.
     window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-    // Dismissing by clicking away should behave like Escape, not like quitting.
-    window.on("blur", () => this.hide());
+    window.on("blur", () => this.blurred());
 
     this.window = window;
+  }
+
+  /**
+   * The box lost focus — the user clicked another window.
+   *
+   * Dismissing by clicking away should behave like Escape, not like quitting.
+   * Except while dictation is in flight, when it must not happen at all: hiding
+   * does not stop the recording, so it used to leave the microphone live on a
+   * window nobody could see, and the next open sent `capture:reset`, silently
+   * discarding everything said before the click. Staying visible keeps the box
+   * as its own indicator that the app is listening, which is exactly what the
+   * Escape path already refuses to leave behind.
+   *
+   * Separate from the listener that calls it so the E2E suite can drive this
+   * decision directly, for the same reason it calls `show()` rather than
+   * pressing the global hotkey: window focus is the window manager's to give,
+   * and a headless runner never grants it.
+   */
+  blurred(): void {
+    if (this.dictating) return;
+    this.hide();
   }
 
   /**
@@ -63,12 +89,22 @@ export class CaptureWindow {
     if (!window || window.isDestroyed()) return;
 
     if (window.isVisible()) {
+      // Brought forward, not reopened: nothing is reset, so a half-typed
+      // thought and a live recording both survive. Focus is the point — a box
+      // pinned open by dictation has lost focus by definition, and Enter and
+      // Escape only reach it once it has focus back. Without this, a recording
+      // that lost focus could not be stopped from the keyboard at all.
+      window.focus();
       if (mode === "dictate") window.webContents.send("capture:start-dictation");
       return;
     }
 
     const started = TRACE ? Date.now() : 0;
 
+    // The reset the renderer is about to act on tears any recording down, so
+    // the flag it set is stale from here rather than from whenever its reply
+    // arrives.
+    this.dictating = false;
     window.webContents.send("capture:reset", mode);
     window.show();
     window.focus();
@@ -93,6 +129,23 @@ export class CaptureWindow {
   isVisible(): boolean {
     const window = this.window;
     return Boolean(window && !window.isDestroyed() && window.isVisible());
+  }
+
+  /**
+   * The renderer started or finished dictating.
+   *
+   * Main cannot see the dictation state machine and must not keep a second copy
+   * of it — it needs one fact, and only to answer one question: may this window
+   * be taken away right now? Escape and submit still hide the box while
+   * dictating, because both stop the recording first.
+   */
+  setDictating(active: boolean): void {
+    this.dictating = active;
+  }
+
+  /** Whether the box is currently pinned open by a live dictation. */
+  isDictating(): boolean {
+    return this.dictating;
   }
 
   /**

@@ -48,12 +48,81 @@ retrospective view, and the future LLM-assisted layer all need identity
 resolution, and none of them should have to depend on the policy module or
 duplicate the resolution.
 
+**The intelligence layer has two distinct seams.** Anywhere a model helps with a
+task, two independent questions are being answered: *what is being asked for* and
+*how the model is reached*. They change for different reasons and at different
+rates, so they are separate interfaces with a module between them.
+
+> **"Port" here means an interface with a single call site, supplied by
+> injection.** It is the `TranscriptionPort` / `SummaryProvider` shape: a named
+> type core declares, one place core calls it, and an implementation passed in as
+> an argument. It does **not** mean a network binding. Feature 7 (the local
+> HTTP/JSON API, deferred below) does involve a real network port, in the TCP
+> sense; nothing in this section does. The two meanings are unrelated and this
+> document uses the word only in the interface sense outside that feature.
+
+**Seam one — what intelligence does.** Core declares a port per job, expressed in
+Waypoint's own vocabulary: splitting a messy dictated capture into distinct
+items, suggesting a destination for an inbox item, drafting a review summary.
+These ports say what is wanted in domain terms and are stable regardless of what
+answers them. `SummaryProvider`, shipped with Feature 5, is the first of them and
+sets the shape — a named interface, one call site, injected, no loader.
+
+**Seam two — how a model is reached.** A transport carries prompt text out and
+brings response text back. The known cases are: shelling out to a command-line
+tool such as the Claude CLI; HTTP to a locally running model such as Ollama;
+HTTPS with client-certificate authentication to a corporate endpoint; and
+reaching a model through an editor integration such as Copilot in VS Code, where
+a command line is blocked. These are transport concerns and contain nothing about
+task management — a transport has never heard of a project, an inbox item, or a
+review.
+
+**Between them sits the intelligence module.** It implements seam one's ports and
+is configured with a seam-two transport. Prompt construction, response parsing,
+and the suggest-don't-decide semantics live in the module. Authentication, wire
+format, and process invocation live in the transport. Moving between a home
+machine and a restricted work machine changes only the transport — the same
+portability motivation that led to building Waypoint in the first place.
+
+**Transport selection is configured, never auto-detected.** The choice lives in
+the git-tracked data directory alongside the policy and identity configuration,
+as an explicit value. Auto-detection — probing for a CLI on `PATH`, for a
+listening Ollama, for an editor host — would make the application behave
+differently on two machines for reasons the user cannot see, which is exactly
+what plain-text configuration stored with the data exists to prevent.
+
+**The entire layer degrades to nothing.** A transport that is unconfigured, one
+that is unavailable, and one that fails mid-call all land in the same place: the
+feature still works and the user does the thinking themselves. There is no broken
+affordance, no disabled-looking control, and no error the user has to clear. This
+is already the summary port's shipped behavior — a review with no provider
+completes normally — and it becomes the module-wide contract rather than one
+feature's local decision.
+
+**The plugin system is deliberately deferred, as it is for policy.** Ship one
+default intelligence module and a small known set of transports, wired by an
+explicit configuration value. No loader, no discovery mechanism, no public
+extension API. Adding a transport without a code change would require discovery,
+which Principle V defers. The transport interface should be exercised across at
+least two genuinely different real environments before it is considered for
+publication, because a contract designed against real environments is far more
+likely to survive a third than one designed against a hypothetical.
+
+**Two extension points, deliberately asymmetric.** Adding a transport is the
+cheap, common case: one adapter that takes prompt text and returns response text,
+inheriting all of the default module's prompt construction and parsing. Writing a
+separate intelligence module is the expensive, rare case — for someone who
+disagrees with how the default module *thinks*, rather than only with where it
+connects. The transport seam is the front door, and most contributors should
+never need the other one.
+
 Clients, in order of arrival:
 1. **Electron GUI** — the primary interface (macOS + Linux)
-2. **Local HTTP/JSON API** — added once core logic is stable; lets other
-   tools (including an AI agent) call the same verbs the GUI uses
-3. **AI agent integration** — consumes the local API; not a separate
-   implementation, just another API client
+2. **Local HTTP/JSON API** — **deferred and unscheduled** (see Feature 7). Its
+   original job was giving an AI agent a way in; the port pattern above serves
+   that for anything running in-process, leaving only out-of-process consumers
+3. **AI agent integration** — in-process consumers use the intelligence ports;
+   an out-of-process agent would consume the local API if and when it is built
 
 All clients share the same vocabulary: projects, areas, waiting-for, top-three,
 capture, sort, review. No client invents its own concepts (constitution
@@ -82,6 +151,10 @@ Plain-text, git-tracked, stored **outside** the application repo:
 - **identity configuration** — the canonical `me` value and its aliases, in a
   **separate file** from policy configuration. Read by core, not by policy; a
   fact about this data directory rather than an opinion about how to work
+- **intelligence configuration** — which transport the intelligence module is
+  wired to, as an explicit value; never auto-detected. Lives here for the same
+  reason policy configuration does, and absent means the layer is simply off.
+  Filename and format are Feature 8's to decide
 
 ## Feature sequence
 
@@ -172,12 +245,28 @@ Plain-text, git-tracked, stored **outside** the application repo:
       performance conversations, 1:1s. Reads the completion dates Feature 3
       records when a milestone or project is marked done; captures nothing
       new of its own)
-- [ ] **Feature 7 — Local HTTP/JSON API** (exposes core verbs so non-GUI
-      clients, including an AI agent, can call capture/sort/review/etc.)
-- [ ] **Feature 8 — LLM-assisted inbox organization** (splits messy
+- [ ] **Feature 8 — LLM-assisted inbox organization** — **next** (splits messy
       dictated streams into distinct items, suggests project/area/
       waiting-for placement; suggest-don't-decide, human confirms during
-      sort; built as a client of the API, not baked into the core)
+      sort). **Built on the intelligence layer described in Architecture, not
+      on the API**: core declares the split and destination-suggestion ports
+      beside Feature 5's summary port, the default intelligence module
+      implements them, and a configured transport carries the calls. This
+      feature is where the module and the first transports arrive. It keeps the
+      degrade-to-nothing contract — with no transport configured, sort behaves
+      exactly as Feature 2 shipped it. Numbered 8 before it was resequenced
+      ahead of Feature 7; the number is kept because specs and code already
+      cite it
+- [ ] **Feature 7 — Local HTTP/JSON API** — **deferred, unscheduled** (exposes
+      core verbs so non-GUI clients can call capture/sort/review/etc.). Its
+      original justification was giving an AI agent a way in without fragile UI
+      automation, and the port pattern now serves that for anything running
+      in-process. What remains is out-of-process consumers only — a
+      command-line client, an agent on another machine, a script. Nothing
+      currently being built requires one, and core's verbs are already exactly
+      what an API would expose, so deferring it blocks nothing and costs no
+      rework when it arrives. The existing guards that keep HTTP out of core
+      (`packages/core/tests/project-scope-boundaries.test.ts`) stay as they are
 - [ ] **Feature 9 — Daily shutdown** (2-minute end-of-day: view top-three +
       due waiting-for follow-ups, capture loose threads). Calendar-flagged
       items carry a flag date so this feature can surface the ones left
@@ -188,7 +277,7 @@ Plain-text, git-tracked, stored **outside** the application repo:
 Real defects found in shipped behaviour, kept here rather than in a feature
 spec because each one is a fix to something that already exists.
 
-- [ ] **Dictation does not survive losing focus** — the capture box hides on
+- [x] **Dictation does not survive losing focus** — the capture box hides on
       blur (clicking any other window), but hiding does not stop the
       recording. Verified against the running app: after the window hides the
       renderer stays in `recording`, the level meter keeps moving, and the
@@ -207,6 +296,26 @@ spec because each one is a fix to something that already exists.
       duration. The privacy angle makes this more than an annoyance: a live
       microphone with no visible indicator is exactly what the Escape path
       already refuses to leave behind.
+      **Fixed 2026-08-17 by answering (a): dictation pins the box open.** Blur
+      does not hide while dictation is in flight, so (b) never arises — no audio
+      is discarded because the box is never taken away to reset. (c) is answered
+      without a global accelerator: either hotkey now focuses an already-visible
+      box instead of returning without touching it, so the pinned box is one
+      keystroke from Enter and Escape again. **No new system-wide key is taken.**
+      "In flight" is every non-idle dictation state, not only `recording`:
+      `acquiring` can already hold an open microphone, and a box hidden while
+      `transcribing` would lose the arriving transcript to the next reset — the
+      same defect one state along. Main learns the fact from the renderer over
+      `capture:dictating` and keeps one boolean; it does not get a second copy
+      of the state machine, and it asks only one question of it — may this
+      window be taken away right now? Escape and submit still close a dictating
+      box, because both stop the recording first.
+      The blur decision moved into `CaptureWindow.blurred()` so the E2E suite
+      can drive it: window focus is the window manager's to give and a test
+      runner grants none, so `BrowserWindow.blur()` is silently a no-op there —
+      the same reason the suite calls `show()` rather than pressing the global
+      hotkey. Guarded by `packages/desktop/tests/e2e/dictation-blur.spec.ts`,
+      whose five defect tests were each confirmed to fail without the fix.
 
 ## Key decisions log
 
@@ -299,6 +408,32 @@ spec because each one is a fix to something that already exists.
   so counting unknowns would make the limit fire on untriaged stubs — precisely
   the false-alarm failure mode that scoping the limit to the user's own projects
   exists to avoid. Null DRIs are surfaced informationally instead, never blocking.
+- **Intelligence is split into two seams: what is asked for, and how the model is
+  reached** — a port per job in Waypoint's vocabulary, a transport that only moves
+  prompt text and response text, and a module in between holding prompt
+  construction, parsing, and suggest-don't-decide. Changing machines then changes
+  the transport and nothing else. Transport selection is configured in the data
+  directory rather than auto-detected, because a probe would make the app behave
+  differently on two machines for invisible reasons. The whole layer degrades to
+  nothing: unconfigured, unavailable, and failing all land on "the feature works
+  and the user thinks for themselves," which is already what the summary port
+  ships.
+- **Many ports for many intelligence jobs is the signal that a general
+  integration surface was actually wanted** — one or two ports is a seam; five is
+  a plugin system built by accident, one call site at a time. Declaring that many
+  means the real requirement was a way for outside things to call core's verbs,
+  not a way for core to call outward. **That is the point at which the HTTP API
+  (Feature 7) earns its keep** and should come off the deferred list. Until then
+  the count is the metric to watch, not the elegance of any individual port.
+- **Adding a transport is cheap and expected; writing an intelligence module is
+  not** — the two extension points are deliberately asymmetric. A transport is one
+  adapter taking prompt text to response text, inheriting all of the default
+  module's prompting and parsing; a second module is for someone who disagrees
+  with how the default one thinks rather than only with where it connects. The
+  transport seam is the front door. The interface stays internal until it has been
+  exercised against at least two genuinely different real environments, on the
+  same reasoning as the policy seam: a contract designed against real environments
+  is far likelier to survive a third than one designed against a hypothetical.
 - **Open-core is left open, so the license is a deliberate choice** — this
   architecture makes a free core plus default module, with third-party or
   commercial modules on top, possible later without rework. That option is worth

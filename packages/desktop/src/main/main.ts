@@ -273,6 +273,12 @@ function start(): void {
       showCapture,
       showCaptureDictating,
       hideCapture: () => captureWindow.hide(),
+      // Clicking another window is the trigger in real use. The suite calls the
+      // same handler that event calls, because a test runner has no window
+      // manager to take focus away with — the same reason `showCapture` stands
+      // in for the global hotkey.
+      blurCapture: () => captureWindow.blurred(),
+      isCaptureDictating: () => captureWindow.isDictating(),
       trayClick: showCapture,
       isCaptureVisible: () => captureWindow.isVisible(),
       hotkeyRegistered: () => hotkeys.capture,

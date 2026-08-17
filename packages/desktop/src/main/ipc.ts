@@ -90,6 +90,14 @@ export function registerIpc(
     window.acknowledgeNotice(id);
   });
 
+  // A fact about the renderer's state, not a request: the window decides what
+  // to do with it. Sent because hide-on-blur lives in main and the dictation
+  // state machine lives in the renderer, and the one must not fire during the
+  // other.
+  ipcMain.on("capture:dictating", (_event, active: boolean) => {
+    window.setDictating(Boolean(active));
+  });
+
   ipcMain.on("capture:dismiss", () => {
     // Deliberately does NOT expire the undo window. Submitting closes the box
     // via this same channel, and expiring here would destroy the undo window

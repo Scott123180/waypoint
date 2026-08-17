@@ -45,6 +45,18 @@ const api = {
     ipcRenderer.send("capture:dismiss");
   },
 
+  /**
+   * Dictation began or ended — the microphone is open, or a transcript is still
+   * on its way back.
+   *
+   * Main needs this because clicking away hides the box, and hiding does not
+   * stop a recording: the box has to stay put until dictation is finished with
+   * it.
+   */
+  dictating(active: boolean): void {
+    ipcRenderer.send("capture:dictating", active);
+  },
+
   onReset(callback: (mode: "type" | "dictate") => void): void {
     ipcRenderer.on("capture:reset", (_event, mode: "type" | "dictate" = "type") => callback(mode));
   },
