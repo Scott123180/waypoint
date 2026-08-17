@@ -1,6 +1,6 @@
 {
   "name": "@waypoint/core",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "All Waypoint domain logic. Imports nothing from Electron.",
   "main": "dist/src/index.js",
