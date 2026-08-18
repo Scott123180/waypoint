@@ -312,8 +312,15 @@ which three files this feature was allowed to change would have failed, and the 
 seven named guards were *not* touched — would have passed vacuously forever. A guard that cannot fail is not a
 guard.
 
-Both now measure against a pinned commit, and `baselineFiles()` refuses to return a list containing itself
-whatever that commit is ever changed to.
+Pinning the query to that commit fixed the recursion and failed differently, on the next CI run: `actions/
+checkout` clones shallow, so the pre-feature commit does not exist on a runner at all — `fatal: Not a valid
+object name`. The baseline is therefore **frozen into a committed fixture**, generated once from that commit,
+and the "which files changed" question is answered by comparing content hashes rather than by asking git what
+it thinks is dirty. It now works in a shallow clone, in a source tarball, and with no git at all, and
+`baselineFiles()` refuses to return a list containing itself however the fixture is ever regenerated.
+
+Three attempts, and the thing that was wrong each time was the same: the test was asking its environment a
+question whose answer changed with the environment. The version that works asks nothing.
 
 The generalisable lesson, and the reason this is recorded next to the others: **a test whose meaning depends on
 the working tree's git state passes under exactly one condition and cannot tell you which.** This one was

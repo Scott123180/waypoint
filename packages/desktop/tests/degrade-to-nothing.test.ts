@@ -1,7 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 /**
@@ -20,51 +21,57 @@ import { join, resolve } from "node:path";
  * exactly the failure mode this guarantee is most exposed to. A number that
  * only ever goes up when someone changes it deliberately is the cheapest
  * defence against a test that quietly stopped running.
+ *
+ * ---
+ *
+ * **This file asks git nothing, and that is the fix for two real failures.**
+ *
+ * It first derived the baseline from `git ls-tree HEAD`, reasoning that a list
+ * rots and a query does not. `HEAD` meant "before Feature 8" for exactly as
+ * long as Feature 8 was uncommitted. The first push moved it: the baseline
+ * grew from 187 files to 228 and **included this file**, which spawns a runner
+ * over the baseline — so it spawned itself. Both CI jobs sat on a three-second
+ * step for twenty-one minutes.
+ *
+ * Pinning the query to the pre-feature commit fixed the recursion and failed
+ * differently: `actions/checkout` clones shallow, so that commit does not
+ * exist on a runner at all — `fatal: Not a valid object name`.
+ *
+ * The baseline is therefore **frozen into a fixture**, generated once from
+ * that commit and committed alongside this file. It works in a shallow clone,
+ * in a source tarball, and with no git at all, and it cannot drift, because
+ * nothing recomputes it. The original instinct — "derived, so a new Feature 8
+ * test cannot wander in and inflate it" — is better served by a list that is
+ * incapable of changing than by a query whose answer depends on when it is
+ * asked.
  */
 
 const REPO = resolve(__dirname, "..", "..", "..", "..");
 
-/**
- * The commit this feature started from — "Bump version to 0.6.1", the last one
- * before any of Feature 8 existed.
- *
- * Pinned by SHA, and that is the whole point. This file originally asked git
- * for `HEAD`, which was right for exactly as long as the feature was
- * uncommitted and silently wrong the instant it was committed: `HEAD` then
- * meant "including Feature 8", so the baseline grew from 187 files to 228 —
- * **and included this file**. The test below spawns a runner over the
- * baseline, so it spawned itself, which spawns itself. It did not fail; it
- * recursed, and took a CI runner with it.
- *
- * The lesson is worth more than the fix: a test whose meaning depends on the
- * working tree's git state passes under exactly one condition and cannot say
- * which condition that was. "Before this feature" is a commit, so it is named
- * as one.
- */
-const BASE = "fdc0df8";
+interface Baseline {
+  expectedTests: number;
+  files: Record<string, string>;
+}
 
-/**
- * The test files as they existed before this feature, straight from git.
- *
- * Derived rather than listed, so a new Feature 8 test cannot wander into the
- * baseline and inflate it.
- */
+/** The 187 test files and their contents as of the commit before this feature. */
+const BASELINE = JSON.parse(
+  readFileSync(join(__dirname, "fixtures", "baseline-before-008.json"), "utf8"),
+) as Baseline;
+
+const EXPECTED_FILES = 187;
+const EXPECTED_TESTS = 1646;
+
+/** Where the compiled form of each baseline source file lands. */
+function compiled(source: string): string {
+  return join(REPO, source.replace("/tests/", "/dist/tests/").replace(/\.ts$/, ".js"));
+}
+
 function baselineFiles(): string[] {
-  const tracked = execFileSync(
-    "git",
-    ["ls-tree", "-r", BASE, "--name-only"],
-    { cwd: REPO, encoding: "utf8" },
-  );
-
-  const files = tracked
-    .split("\n")
-    .filter((p) => /^packages\/(core|desktop)\/tests\/.*\.test\.ts$/.test(p))
-    .map((p) => join(REPO, p.replace("/tests/", "/dist/tests/").replace(/\.ts$/, ".js")))
-    .sort();
+  const files = Object.keys(BASELINE.files).sort().map(compiled);
 
   // Structural, not stylistic. A runner spawned over a list containing this
-  // file runs this file, which spawns a runner. Whatever `BASE` is ever
-  // changed to, that must stop here rather than in the process table.
+  // file runs this file, which spawns a runner. However the baseline is ever
+  // regenerated, that must stop here rather than in the process table.
   assert.ok(
     !files.some((f) => f.includes("degrade-to-nothing")),
     "the baseline contains this very file — running it would recurse",
@@ -73,21 +80,14 @@ function baselineFiles(): string[] {
   return files;
 }
 
-/**
- * Exactly what was observed on 2026-08-17, with no `intelligence.md` anywhere.
- *
- * Raise these deliberately when a feature adds tests. If they fall, something
- * stopped running.
- */
-const EXPECTED_FILES = 187;
-const EXPECTED_TESTS = 1646;
-
 describe("Features 1 through 6, against an unconfigured build", () => {
-  test("every pre-existing test file is still there", () => {
-    const files = baselineFiles();
-    assert.equal(files.length, EXPECTED_FILES, "the baseline changed size");
+  test("the frozen baseline is the one that was measured", () => {
+    assert.equal(Object.keys(BASELINE.files).length, EXPECTED_FILES, "the baseline changed size");
+    assert.equal(BASELINE.expectedTests, EXPECTED_TESTS, "the fixture and this file disagree");
+  });
 
-    for (const file of files) {
+  test("every pre-existing test file is still there", () => {
+    for (const file of baselineFiles()) {
       assert.ok(existsSync(file), `${file} was not compiled — it cannot have run`);
     }
   });
@@ -127,28 +127,28 @@ describe("Features 1 through 6, against an unconfigured build", () => {
 
 describe("what this feature was allowed to change", () => {
   /**
-   * Test-tree files this feature **changed**, from git rather than from memory.
+   * Pre-existing test-tree files whose **contents** differ from the frozen
+   * baseline.
    *
-   * Measured against `BASE` and the working tree together, so it reads the
-   * same before the feature is committed and after. It previously read
-   * `git status --porcelain`, which sees only uncommitted work: once this
-   * branch was committed the answer became the empty list, so the two
-   * assertions below would have failed and the guard assertion beneath them
-   * would have passed vacuously forever — a guard that cannot fail is not one.
+   * By content, not by git bookkeeping. This previously read
+   * `git status --porcelain`, which sees only uncommitted work: the moment the
+   * branch was committed it returned the empty list, so the two assertions
+   * below would have failed and the guard assertion beneath them would have
+   * passed vacuously forever. A guard that cannot fail is not a guard.
    *
-   * `--diff-filter=M` keeps the original meaning: files that already existed
-   * and were edited. Feature 8's own new test files are additions, and adding
-   * a test is not what this section is watching for.
+   * A hash comparison has neither problem. It gives the same answer before the
+   * commit, after the commit, and in a checkout with no history — and it
+   * answers the question actually being asked, which was never "what does git
+   * think is dirty" but "which of these files is no longer what it was".
    */
-  function modified(): string[] {
-    return execFileSync(
-      "git",
-      ["diff", "--name-only", "--diff-filter=M", BASE, "--", "packages"],
-      { cwd: REPO, encoding: "utf8" },
-    )
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((p) => /^packages\/(core|desktop)\/tests\//.test(p))
+  function changed(): string[] {
+    return Object.entries(BASELINE.files)
+      .filter(([source, hash]) => {
+        const path = join(REPO, source);
+        if (!existsSync(path)) return true;
+        return createHash("sha256").update(readFileSync(path)).digest("hex") !== hash;
+      })
+      .map(([source]) => source)
       .sort();
   }
 
@@ -169,18 +169,13 @@ describe("what this feature was allowed to change", () => {
    *
    * Neither changes what any existing test asserts, which is the line that
    * matters — and the count assertion above is what proves it.
+   *
+   * Only `sort-scope-boundaries.test.ts` appears below: the baseline covers
+   * `*.test.ts`, and the other two are helpers, which is precisely the
+   * distinction the plan's prediction failed to draw.
    */
-  test("exactly three test-tree files, and each one is accounted for", () => {
-    assert.deepEqual(modified(), [
-      "packages/core/tests/sort-fakes.ts",
-      "packages/core/tests/sort-scope-boundaries.test.ts",
-      "packages/desktop/tests/e2e/harness.ts",
-    ]);
-  });
-
-  test("only one of them is a test file rather than a helper", () => {
-    const tests = modified().filter((p) => p.endsWith(".test.ts"));
-    assert.deepEqual(tests, ["packages/core/tests/sort-scope-boundaries.test.ts"]);
+  test("exactly one pre-existing test file changed, and it is accounted for", () => {
+    assert.deepEqual(changed(), ["packages/core/tests/sort-scope-boundaries.test.ts"]);
   });
 
   test("the guards this feature must not have touched are untouched", () => {
@@ -195,7 +190,10 @@ describe("what this feature was allowed to change", () => {
     ];
 
     for (const path of untouched) {
-      assert.ok(!modified().includes(path), `${path} was edited, and it is a guard`);
+      // Each must be in the baseline at all — a guard dropped from the fixture
+      // would otherwise "pass" by not being looked at.
+      assert.ok(BASELINE.files[path], `${path} is not in the frozen baseline`);
+      assert.ok(!changed().includes(path), `${path} was edited, and it is a guard`);
     }
   });
 });
