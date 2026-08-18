@@ -25,6 +25,25 @@ import { join, resolve } from "node:path";
 const REPO = resolve(__dirname, "..", "..", "..", "..");
 
 /**
+ * The commit this feature started from — "Bump version to 0.6.1", the last one
+ * before any of Feature 8 existed.
+ *
+ * Pinned by SHA, and that is the whole point. This file originally asked git
+ * for `HEAD`, which was right for exactly as long as the feature was
+ * uncommitted and silently wrong the instant it was committed: `HEAD` then
+ * meant "including Feature 8", so the baseline grew from 187 files to 228 —
+ * **and included this file**. The test below spawns a runner over the
+ * baseline, so it spawned itself, which spawns itself. It did not fail; it
+ * recursed, and took a CI runner with it.
+ *
+ * The lesson is worth more than the fix: a test whose meaning depends on the
+ * working tree's git state passes under exactly one condition and cannot say
+ * which condition that was. "Before this feature" is a commit, so it is named
+ * as one.
+ */
+const BASE = "fdc0df8";
+
+/**
  * The test files as they existed before this feature, straight from git.
  *
  * Derived rather than listed, so a new Feature 8 test cannot wander into the
@@ -33,15 +52,25 @@ const REPO = resolve(__dirname, "..", "..", "..", "..");
 function baselineFiles(): string[] {
   const tracked = execFileSync(
     "git",
-    ["ls-tree", "-r", "HEAD", "--name-only"],
+    ["ls-tree", "-r", BASE, "--name-only"],
     { cwd: REPO, encoding: "utf8" },
   );
 
-  return tracked
+  const files = tracked
     .split("\n")
     .filter((p) => /^packages\/(core|desktop)\/tests\/.*\.test\.ts$/.test(p))
     .map((p) => join(REPO, p.replace("/tests/", "/dist/tests/").replace(/\.ts$/, ".js")))
     .sort();
+
+  // Structural, not stylistic. A runner spawned over a list containing this
+  // file runs this file, which spawns a runner. Whatever `BASE` is ever
+  // changed to, that must stop here rather than in the process table.
+  assert.ok(
+    !files.some((f) => f.includes("degrade-to-nothing")),
+    "the baseline contains this very file — running it would recurse",
+  );
+
+  return files;
 }
 
 /**
@@ -97,12 +126,28 @@ describe("Features 1 through 6, against an unconfigured build", () => {
 });
 
 describe("what this feature was allowed to change", () => {
-  /** Files with uncommitted modifications, from git rather than from memory. */
+  /**
+   * Test-tree files this feature **changed**, from git rather than from memory.
+   *
+   * Measured against `BASE` and the working tree together, so it reads the
+   * same before the feature is committed and after. It previously read
+   * `git status --porcelain`, which sees only uncommitted work: once this
+   * branch was committed the answer became the empty list, so the two
+   * assertions below would have failed and the guard assertion beneath them
+   * would have passed vacuously forever — a guard that cannot fail is not one.
+   *
+   * `--diff-filter=M` keeps the original meaning: files that already existed
+   * and were edited. Feature 8's own new test files are additions, and adding
+   * a test is not what this section is watching for.
+   */
   function modified(): string[] {
-    return execFileSync("git", ["status", "--porcelain"], { cwd: REPO, encoding: "utf8" })
+    return execFileSync(
+      "git",
+      ["diff", "--name-only", "--diff-filter=M", BASE, "--", "packages"],
+      { cwd: REPO, encoding: "utf8" },
+    )
       .split("\n")
-      .filter((line) => line.length > 0 && !line.startsWith("??"))
-      .map((line) => line.slice(3).trim())
+      .map((line) => line.trim())
       .filter((p) => /^packages\/(core|desktop)\/tests\//.test(p))
       .sort();
   }

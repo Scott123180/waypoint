@@ -293,3 +293,30 @@ predates this work, and it is now written down where the next person to raise a 
 The generalisable point, and the reason this is in the plan rather than only in a commit message: **"the code
 emits it" is not the same claim as "the user sees it"**, and only one of those is what a requirement like
 FR-055 asks for. The original test asserted the half that was easy to reach.
+
+### The baseline that only existed before the commit (recorded 2026-08-18)
+
+`degrade-to-nothing.test.ts` is the file that proves T063 and SC-001: it runs the 187 test files that predate
+this feature and asserts 1646 of them executed with zero failures. It asked git for the baseline rather than
+listing it, which was the right instinct — a hand-written list rots — but it asked for `HEAD`.
+
+`HEAD` meant "before Feature 8" for exactly as long as Feature 8 was uncommitted. The first push moved it, the
+baseline grew from 187 files to 228, and the 228 **included `degrade-to-nothing.test.js` itself**. The test
+spawns a runner over the baseline, so it spawned itself. Both CI jobs sat on a step that takes three seconds
+locally until the run was cancelled twenty-one minutes later. It did not fail — it recursed, which is a worse
+shape of the same problem: a green that never arrives says nothing about the code.
+
+The companion defect was in the same file and had the same cause. `modified()` read `git status --porcelain`,
+which sees only uncommitted work, so on a committed branch it returned the empty list: the two assertions about
+which three files this feature was allowed to change would have failed, and the assertion beneath them — that
+seven named guards were *not* touched — would have passed vacuously forever. A guard that cannot fail is not a
+guard.
+
+Both now measure against a pinned commit, and `baselineFiles()` refuses to return a list containing itself
+whatever that commit is ever changed to.
+
+The generalisable lesson, and the reason this is recorded next to the others: **a test whose meaning depends on
+the working tree's git state passes under exactly one condition and cannot tell you which.** This one was
+written, run, and observed green while the feature was uncommitted — the only state in which it was ever
+correct. It is the same failure the file itself was written to catch, one level up: not a suite that silently
+did not run, but a suite that silently could not stop running.
