@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -102,12 +102,39 @@ describe("Features 1 through 6, against an unconfigured build", () => {
     delete env["NODE_TEST_CONTEXT"];
     delete env["NODE_OPTIONS"];
 
-    const result = execFileSync(process.execPath, ["--test", ...files], {
+    // `spawnSync`, not `execFileSync`, and the reason is a CI round trip that
+    // was wasted learning it: `execFileSync` throws on a non-zero exit with a
+    // message that is the *command* — here, two thousand characters of file
+    // paths — and the child's own output is on a property the test runner does
+    // not print. A nested suite whose failure cannot be read is only slightly
+    // better than one that hangs. This keeps the output and shows the part
+    // that says what broke.
+    const run = spawnSync(process.execPath, ["--test", ...files], {
       cwd: REPO,
       encoding: "utf8",
       env,
       maxBuffer: 64 * 1024 * 1024,
     });
+
+    const result = `${run.stdout ?? ""}${run.stderr ?? ""}`;
+
+    if (run.status !== 0) {
+      // Every failing subtest, with the assertion beneath it — enough to act
+      // on from a CI log alone, without reproducing the run.
+      const failures = result
+        .split("\n")
+        .filter((line, i, all) =>
+          /^\s*not ok /.test(line) ||
+          (/^\s*(error|expected|actual|operator):/.test(line) &&
+            all.slice(Math.max(0, i - 12), i).some((l) => /^\s*not ok /.test(l))),
+        )
+        .slice(0, 60)
+        .join("\n");
+
+      assert.fail(
+        `the pre-existing suite failed against an unconfigured build (exit ${run.status}):\n${failures}`,
+      );
+    }
 
     const number = (label: string): number => {
       const match = new RegExp(`^# ${label} (\\d+)$`, "m").exec(result);
