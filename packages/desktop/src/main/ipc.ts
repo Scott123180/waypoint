@@ -20,8 +20,11 @@ import {
   type RetrospectiveService,
   type ReviewService,
   type ReviewStepName,
+  type PreparedRequest,
   type SortDecision,
   type SortService,
+  type SuggestionFailure,
+  type SuggestionService,
   type TopThreeService,
   type WaitingRef,
 } from "@waypoint/core";
@@ -152,6 +155,123 @@ function registerSortIpc(
 
     return outcome;
   });
+
+  /**
+   * 008: dividing one item into several.
+   *
+   * Named `sort:*` rather than `suggest:*` because it is a sort-time write
+   * with no knowledge of proposals, and registered **unconditionally** for the
+   * same reason: it is a `SortService` verb, and its availability has nothing
+   * to do with whether a model can be reached. It takes the piece strings the
+   * renderer holds after the user has edited them, and cannot tell whether
+   * they came from a proposal (008 FR-031).
+   */
+  ipcMain.handle("sort:split", async (_event, ref: ItemRef, pieces: string[]) => {
+    const outcome = await sort.split(ref, pieces);
+
+    if (outcome.ok) {
+      // Same reasoning as `sort:decide`: the inbox was spliced, so an open
+      // undo window points at stale offsets.
+      capture.expireUndoWindow();
+      onUndoableChange?.();
+    }
+
+    return outcome;
+  });
+}
+
+/** What `suggest:prepare-*` returns: the payload to show, or a plain refusal. */
+export type PrepareResponse =
+  | { ok: true; id: string; payload: string }
+  | { ok: false; reason: SuggestionFailure; message: string };
+
+/**
+ * 008: the suggestion channels.
+ *
+ * **Registered only when a transport is configured.** With none, `ipcMain.handle`
+ * is not called for any `suggest:*` channel and the preload exposes no
+ * `suggest` object, so the renderer has nothing to hide, disable, or grey out.
+ * A `disabled` attribute would not satisfy FR-060 — a control that exists and
+ * is invisible is still a control, and one bad selector away from visible
+ * (research R17).
+ *
+ * Preparing and running are two channels because FR-041 requires the exact
+ * content to be shown before it is sent: `prepare` returns the payload and
+ * sends nothing, `run` sends it.
+ *
+ * See specs/008-llm-assisted-inbox-organization/contracts/ipc-suggest.md
+ */
+export function registerSuggestIpc(suggest: SuggestionService): void {
+  /**
+   * The prepared requests this window is holding, by opaque id.
+   *
+   * In memory, per window, and dropped as soon as they are used or abandoned.
+   * Nothing about a prepared request is persisted anywhere — no cache, no
+   * history, no record of what was asked (008 FR-046, FR-070).
+   */
+  const held = new Map<string, PreparedRequest<unknown>>();
+  let nextId = 0;
+
+  const hold = (prepared: PreparedRequest<unknown>): string => {
+    const id = `s${++nextId}`;
+    held.set(id, prepared);
+    return id;
+  };
+
+  ipcMain.handle("suggest:prepare-split", async (_event, item: SerializedItem): Promise<PrepareResponse> => {
+    const result = await suggest.prepareSplit({
+      text: item.text,
+      capturedAt: item.capturedAt === null ? null : new Date(item.capturedAt),
+      ref: item.ref,
+    });
+    if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+
+    return { ok: true, id: hold(result.prepared), payload: result.prepared.payload };
+  });
+
+  ipcMain.handle("suggest:prepare-destination", async (_event, text: string): Promise<PrepareResponse> => {
+    const result = await suggest.prepareDestination(text);
+    if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+
+    return { ok: true, id: hold(result.prepared), payload: result.prepared.payload };
+  });
+
+  /**
+   * Takes an **id**, never the payload text.
+   *
+   * If the renderer sent the payload back, the content reaching the transport
+   * would be whatever crossed the bridge twice, and a mismatch with what was
+   * previewed would become possible. The main process calls `run()` on the
+   * request it already holds, and that closure is over the payload it already
+   * returned — so the bridge cannot influence what is sent (008 FR-045).
+   */
+  ipcMain.handle("suggest:run", async (_event, id: string) => {
+    const prepared = held.get(id);
+    if (!prepared) {
+      return {
+        ok: false,
+        reason: "unusable" as const,
+        message: "That request is no longer available. Ask again; nothing was changed.",
+      };
+    }
+    // Dropped before running: `run()` sends once, and a second attempt is a
+    // second `prepare` by the client, never a retry (008 FR-065).
+    held.delete(id);
+    return prepared.run();
+  });
+
+  ipcMain.on("suggest:abandon", (_event, id: string) => {
+    const prepared = held.get(id);
+    held.delete(id);
+    prepared?.abandon();
+  });
+}
+
+/** How an inbox item crosses the bridge, matching `sort:next`'s shape. */
+interface SerializedItem {
+  text: string;
+  capturedAt: string | null;
+  ref: ItemRef;
 }
 
 /** What a scalar `projects:set-field` call may target. */

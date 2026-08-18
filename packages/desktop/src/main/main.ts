@@ -10,7 +10,13 @@ import {
   SortService,
   TopThreeService,
   WaitingService,
+  SuggestionService,
+  catalogOf,
+  createDefaultIntelligence,
+  parseIntelligenceConfig,
+  INTELLIGENCE_PATH,
   type InboxWriteError,
+  type Transport,
 } from "@waypoint/core";
 
 import { FsInboxStore } from "./adapters/fs-inbox-store";
@@ -21,6 +27,8 @@ import { InboxMutex } from "./inbox-mutex";
 import { InboxChanged } from "./inbox-changed";
 import { VaultChanged } from "./vault-changed";
 import { WhisperAdapter } from "./adapters/whisper-adapter";
+import { CommandTransport } from "./adapters/command-transport";
+import { CertificateTransport } from "./adapters/certificate-transport";
 import { CaptureWindow } from "./capture-window";
 import { SortWindow } from "./sort-window";
 import { ProjectsWindow } from "./projects-window";
@@ -34,6 +42,7 @@ import {
   registerProjectsIpc,
   registerRetrospectiveIpc,
   registerReviewIpc,
+  registerSuggestIpc,
   registerTopThreeIpc,
 } from "./ipc";
 import { whisperBinaryName, whisperResourcesDir } from "./resources";
@@ -41,7 +50,10 @@ import { createTray, type TrayHandle } from "./tray";
 
 let tray: TrayHandle | undefined;
 
-function start(): void {
+// Async because the intelligence configuration is read from the vault before
+// the sort window is built: whether the `suggest` bridge is attached at all is
+// decided here, and a window created first would have to be told afterwards.
+async function start(): Promise<void> {
   // Binary and model both resolve from here, so they cannot drift apart.
   const resourcesDir = whisperResourcesDir({
     isPackaged: app.isPackaged,
@@ -151,7 +163,62 @@ function start(): void {
     vault: vaultStore,
   });
 
-  const sortWindow = new SortWindow();
+  /**
+   * 008: the intelligence layer, off unless `intelligence.md` says otherwise.
+   *
+   * Read from the vault — never probed. No `PATH` check, no scan for a
+   * listening local model, no environment variable, no editor-host detection.
+   * A machine with a CLI tool installed and a model listening, and no
+   * `intelligence.md`, has this **off**, because auto-detection makes the
+   * application behave differently on two machines for reasons the user cannot
+   * see (FR-052).
+   */
+  const intelligenceConfig = parseIntelligenceConfig(
+    // `.catch(() => null)` is load-bearing, not defensive habit. `read` only
+    // treats ENOENT as "absent"; a vault root that is unreadable — wrong
+    // permissions, a broken mount, or a misconfigured path that is not a
+    // directory at all — throws. Letting that propagate would mean a file this
+    // feature owns could stop capture and sorting from starting at all, which
+    // is the exact opposite of FR-055. Unreadable is treated as absent: the
+    // layer goes off, silently, and everything else starts normally.
+    await vaultStore.read(INTELLIGENCE_PATH).catch(() => null),
+  );
+
+  // A closed `switch` over the two values that ship. No fallback, no lookup,
+  // no default case that could resolve something unexpected: an unrecognised
+  // value was already turned into a `problem` by the parser (FR-057).
+  const transport = ((): Transport | null => {
+    switch (intelligenceConfig.kind) {
+      case "command":
+        return new CommandTransport({
+          command: intelligenceConfig.command,
+          args: intelligenceConfig.args,
+        });
+      case "certificate":
+        return new CertificateTransport({
+          endpoint: intelligenceConfig.endpoint,
+          certificate: intelligenceConfig.certificate,
+          key: intelligenceConfig.key,
+          ca: intelligenceConfig.ca,
+        });
+      case "off":
+      case "problem":
+        return null;
+    }
+  })();
+
+  const suggestionService =
+    transport === null
+      ? null
+      : new SuggestionService({
+          // The only read source, and it cannot name a file — so `identity.md`,
+          // `policy.md`, `trash.md`, `calendar.md`, `top-three.md`, and `log/`
+          // are not reachable from here (research R6).
+          catalog: catalogOf(vaultStore),
+          intelligence: createDefaultIntelligence(transport),
+        });
+
+  const sortWindow = new SortWindow(suggestionService !== null);
   const showSort = (): void => sortWindow.show();
 
   const projectsWindow = new ProjectsWindow();
@@ -193,6 +260,10 @@ function start(): void {
   registerTopThreeIpc(topThreeService, () => topThreeWindow.hide());
   registerReviewIpc(reviewService, () => reviewWindow.hide(), showSort);
   registerRetrospectiveIpc(retrospectiveService, () => retrospectiveWindow.hide());
+
+  // 008: registered **only** when a transport is configured. With none, no
+  // `suggest:*` channel exists at all — not a disabled one (FR-060).
+  if (suggestionService) registerSuggestIpc(suggestionService);
 
   // Finish anything that was in flight when the process last stopped, before
   // the user can see a half-committed state (FR-020d, FR-024).
@@ -246,6 +317,20 @@ function start(): void {
 
   if (problem) {
     emitNotice({ level: "error", message: problem });
+  }
+
+  // The vault's configuration problem, reported beside the application's own
+  // and for the same reason it is reported here rather than where it is found.
+  //
+  // The capture box holds **one** notice at a time: `showNotice` replaces the
+  // element's text, so of several notices replayed on the first open, the last
+  // delivered is the one the user reads. Raising this where the file is parsed
+  // — before the hotkeys register — put it behind any startup notice that came
+  // after it, and a problem the user never sees is not "reported plainly"
+  // (FR-055). Emitting it here, with the other configuration problem, is what
+  // makes `suggest-absent.spec.ts`'s reporting assertion hold.
+  if (intelligenceConfig.kind === "problem") {
+    emitNotice({ level: "error", message: intelligenceConfig.message });
   }
 
   // No dock icon: this is a background agent summoned by hotkey or tray.

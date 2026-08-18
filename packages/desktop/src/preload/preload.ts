@@ -120,6 +120,18 @@ const sortApi = {
     return ipcRenderer.invoke("sort:decide", ref, decision);
   },
 
+  /**
+   * 008: divide one item into several.
+   *
+   * Present **always**. It is a `SortService` verb, and its availability has
+   * nothing to do with whether a model can be reached — a user with no
+   * `intelligence.md` could type three pieces by hand and this would write
+   * them (008 FR-031).
+   */
+  split: (ref: ItemRef, pieces: string[]): Promise<SortDecideResponse> => {
+    return ipcRenderer.invoke("sort:split", ref, pieces);
+  },
+
   dismiss(): void {
     ipcRenderer.send("sort:dismiss");
   },
@@ -860,6 +872,50 @@ export interface RetrospectiveQueryShape {
   project: string | null;
 }
 
+/**
+ * 008: the suggestion bridge, attached **only** when a transport is configured.
+ *
+ * `window.waypoint.suggest` is `undefined` otherwise, and that is what the
+ * renderer checks. Not a disabled control, not a hidden one — absent from the
+ * API surface, which is the only form of "no control in any state" that a
+ * stylesheet cannot undo (008 FR-060, research R17).
+ *
+ * The flag arrives as a window argument rather than an IPC round-trip because
+ * the bridge is built before any channel could be invoked, and because a
+ * capability decided in the main process should not be re-asked by the client.
+ */
+const suggestAvailable = process.argv.includes("--waypoint-suggest");
+
+export type PrepareResponse =
+  | { ok: true; id: string; payload: string }
+  | { ok: false; reason: string; message: string };
+
+const suggestApi = {
+  prepareSplit(item: { text: string; capturedAt: string | null; ref: ItemRef }): Promise<PrepareResponse> {
+    return ipcRenderer.invoke("suggest:prepare-split", item);
+  },
+
+  prepareDestination(text: string): Promise<PrepareResponse> {
+    return ipcRenderer.invoke("suggest:prepare-destination", text);
+  },
+
+  /**
+   * Sends what was prepared, named by its id.
+   *
+   * Deliberately not `run(payload)`. If the renderer sent the content back,
+   * what reached the transport would be whatever crossed this bridge twice,
+   * and a mismatch with what was previewed would become possible — which is
+   * exactly what FR-045 rules out by construction.
+   */
+  run: (id: string): Promise<unknown> => {
+    return ipcRenderer.invoke("suggest:run", id);
+  },
+
+  abandon(id: string): void {
+    ipcRenderer.send("suggest:abandon", id);
+  },
+};
+
 contextBridge.exposeInMainWorld("waypoint", {
   ...api,
   sort: sortApi,
@@ -868,6 +924,7 @@ contextBridge.exposeInMainWorld("waypoint", {
   topThree: topThreeApi,
   review: reviewApi,
   retrospective: retrospectiveApi,
+  ...(suggestAvailable ? { suggest: suggestApi } : {}),
 });
 
 export type WaypointApi = typeof api & {
@@ -877,7 +934,10 @@ export type WaypointApi = typeof api & {
   topThree: typeof topThreeApi;
   review: typeof reviewApi;
   retrospective: typeof retrospectiveApi;
+  /** 008: absent when no transport is configured. Optional, so the renderer must check. */
+  suggest?: typeof suggestApi;
 };
+export type WaypointSuggestApi = typeof suggestApi;
 export type WaypointSortApi = typeof sortApi;
 export type WaypointProjectsApi = typeof projectsApi;
 export type WaypointAreasApi = typeof areasApi;

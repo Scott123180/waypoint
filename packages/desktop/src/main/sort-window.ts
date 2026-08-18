@@ -11,6 +11,17 @@ import { join } from "node:path";
 export class SortWindow {
   private window: BrowserWindow | undefined;
 
+  /**
+   * 008: whether a transport is configured.
+   *
+   * Passed to the preload as a window argument so the `suggest` object is
+   * simply not attached when the layer is off. The renderer therefore has
+   * nothing to hide or grey out — the capability is absent from the API
+   * surface, which is the only form of "no control in any state" a stylesheet
+   * cannot undo (008 FR-060, research R17).
+   */
+  constructor(private readonly suggestAvailable = false) {}
+
   get browserWindow(): BrowserWindow | undefined {
     return this.window;
   }
@@ -25,6 +36,7 @@ export class SortWindow {
         preload: join(__dirname, "..", "preload", "preload.js"),
         contextIsolation: true,
         nodeIntegration: false,
+        ...(this.suggestAvailable ? { additionalArguments: ["--waypoint-suggest"] } : {}),
       },
     });
 

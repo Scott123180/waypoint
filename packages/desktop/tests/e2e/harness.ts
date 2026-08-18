@@ -93,6 +93,19 @@ export async function launch(
      * app and relaunch against the same files (US3).
      */
     inboxPath?: string;
+    /**
+     * Files written into the vault **before** the app starts.
+     *
+     * Needed by Feature 8: `intelligence.md` is read once at startup, and
+     * whether the `suggest` bridge is attached at all is decided from it. A
+     * file written after launch would be read by nothing.
+     */
+    seedVault?: Record<string, string>;
+    /**
+     * Extra environment for the app process, inherited by any subprocess it
+     * spawns. Feature 8's command transport drives its fake CLI through these.
+     */
+    env?: Record<string, string>;
   } = {},
 ): Promise<Harness> {
   const dir = options.inboxPath ? dirname(options.inboxPath) : mkdtempSync(join(tmpdir(), "waypoint-e2e-"));
@@ -118,6 +131,12 @@ export async function launch(
     }),
   );
 
+  for (const [relPath, content] of Object.entries(options.seedVault ?? {})) {
+    const target = join(dirname(inboxPath), relPath);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, content, "utf8");
+  }
+
   const app = await electron.launch({
     args: [
       MAIN,
@@ -135,6 +154,7 @@ export async function launch(
       ELECTRON_RUN_AS_NODE: "",
       WAYPOINT_CONFIG_PATH: configPath,
       WAYPOINT_E2E: "1",
+      ...(options.env ?? {}),
     },
   });
 

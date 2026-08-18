@@ -243,6 +243,84 @@
         #progress i { transition: none; }
       }
       [hidden] { display: none !important; }
+      /*
+        The suggestion surface. Same five tokens as everything else — no accent
+        hue, no card, nothing that says "this part is different". A proposal is
+        a thing to read and edit, not a feature to advertise (Principle VII).
+      */
+      #assist:empty { display: none; }
+      #assist { margin: 0 0 12px; }
+      #assist .ask { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      #assist .ask button {
+        font: inherit;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      #assist .ask button:hover:not(:disabled),
+      #assist .ask button:focus-visible { outline: 0; color: var(--fg); border-color: var(--fg); }
+      #assist .ask button:disabled { opacity: 0.55; cursor: default; }
+
+      #preview {
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        max-height: 180px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0 0 8px;
+      }
+      #preview-label { color: var(--muted); font-size: 12px; margin: 0 0 4px; }
+
+      #proposal { border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+      #proposal .reason { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+      .piece { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+      .piece textarea {
+        flex: 1;
+        font: inherit;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 6px 8px;
+        resize: vertical;
+        min-height: 2.6em;
+      }
+      .piece textarea:focus-visible { outline: 0; border-color: var(--fg); }
+      .piece.dropped textarea { opacity: 0.45; text-decoration: line-through; }
+      .piece .drop {
+        font: inherit;
+        color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .piece .drop:hover, .piece .drop:focus-visible { outline: 0; color: var(--fg); border-color: var(--fg); }
+
+      /*
+        The text no piece carries. Bordered in the error colour because losing
+        a dictated thought silently is the one outcome this feature must never
+        produce — but not an error, because dropping a piece on purpose is a
+        thing the user is allowed to do (008 FR-013).
+      */
+      #uncovered {
+        border: 1px solid var(--error);
+        border-radius: 6px;
+        padding: 8px 10px;
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      #uncovered strong { display: block; margin-bottom: 4px; font-weight: 600; }
+      #uncovered ul { margin: 0; padding-left: 18px; }
     </style>
   </head>
   <body>
@@ -255,6 +333,15 @@
       </section>
 
       <div id="panel"></div>
+
+      <!--
+        The suggestion surface. Empty, and its controls absent, unless the
+        renderer found `window.waypoint.suggest` — which the preload attaches
+        only when a transport is configured. Nothing here is ever rendered
+        disabled: a control that exists and is greyed out is still a control,
+        and one bad selector away from visible (008 FR-060).
+      -->
+      <div id="assist"></div>
 
       <div id="controls">
         <div id="choices">

@@ -58,20 +58,42 @@ export class FsInboxDocument implements InboxDocument {
   }
 
   async removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch"> {
-    const result = await this.mutex.run(() => this.spliceWithRetry(start, end, expected));
+    const result = await this.mutex.run(() => this.spliceWithRetry(start, end, expected, ""));
     // A mismatch leaves the file exactly as it was, so it is not a change and
     // must not wake a view: the signal has to mean the bytes actually moved.
-    if (result === "removed") this.onChanged?.();
-    return result;
+    if (result === "spliced") this.onChanged?.();
+    return result === "spliced" ? "removed" : "mismatch";
+  }
+
+  /**
+   * Replaces a range with new content, atomically (008 research R8).
+   *
+   * The same splice `removeRange` performs, with a non-empty replacement.
+   * Sharing it is the point: two implementations of "rebuild and rename" would
+   * be two places for the concurrency handling to diverge, and the second one
+   * would be the one nobody tested against a real editor.
+   */
+  async replaceRange(
+    start: number,
+    end: number,
+    expected: string,
+    replacement: string,
+  ): Promise<"replaced" | "mismatch"> {
+    const result = await this.mutex.run(() =>
+      this.spliceWithRetry(start, end, expected, replacement),
+    );
+    if (result === "spliced") this.onChanged?.();
+    return result === "spliced" ? "replaced" : "mismatch";
   }
 
   private async spliceWithRetry(
     start: number,
     end: number,
     expected: string,
-  ): Promise<"removed" | "mismatch"> {
+    replacement: string,
+  ): Promise<"spliced" | "mismatch"> {
     for (let attempt = 0; attempt < FsInboxDocument.MAX_ATTEMPTS; attempt++) {
-      const result = await this.spliceOnce(start, end, expected);
+      const result = await this.spliceOnce(start, end, expected, replacement);
       if (result !== "retry") return result;
     }
     // Something outside this process is writing continuously. Refusing is the
@@ -83,7 +105,8 @@ export class FsInboxDocument implements InboxDocument {
     start: number,
     end: number,
     expected: string,
-  ): Promise<"removed" | "mismatch" | "retry"> {
+    replacement: string,
+  ): Promise<"spliced" | "mismatch" | "retry"> {
     let current: Buffer;
     try {
       current = await readFile(this.filePath);
@@ -95,7 +118,11 @@ export class FsInboxDocument implements InboxDocument {
     const actual = current.subarray(start, end).toString("utf8");
     if (actual !== expected) return "mismatch";
 
-    const next = Buffer.concat([current.subarray(0, start), current.subarray(end)]);
+    const next = Buffer.concat([
+      current.subarray(0, start),
+      Buffer.from(replacement, "utf8"),
+      current.subarray(end),
+    ]);
 
     const tmpPath = join(dirname(this.filePath), `.inbox.${process.pid}.${Date.now()}.tmp`);
     const handle = await open(tmpPath, "wx");
@@ -121,7 +148,7 @@ export class FsInboxDocument implements InboxDocument {
       if (this.beforeRename) await this.beforeRename();
 
       await rename(tmpPath, this.filePath);
-      return "removed";
+      return "spliced";
     } catch (err) {
       await unlink(tmpPath).catch(() => undefined);
       throw err;

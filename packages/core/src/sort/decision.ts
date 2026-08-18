@@ -42,6 +42,14 @@ export type SortRefusal =
   | "empty-title"
   /** Waiting-for owner empty (FR-014). */
   | "empty-owner"
+  /**
+   * A split was asked for with no piece that has anything in it (008 FR-019).
+   *
+   * Refused rather than treated as a delete: emptying an item by proposing
+   * nothing would be the one destructive thing that path could do, and
+   * discarding already has a verb.
+   */
+  | "empty-pieces"
   /** I/O failure; nothing was committed. */
   | "write-failed";
 

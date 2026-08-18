@@ -45,6 +45,10 @@ interface SortApi {
     ref: ItemRef,
     decision: SortDecision,
   ): Promise<{ ok: true; destination: string } | { ok: false; reason: string; message: string }>;
+  split(
+    ref: ItemRef,
+    pieces: string[],
+  ): Promise<{ ok: true; destination: string } | { ok: false; reason: string; message: string }>;
   dismiss(): void;
   onRefresh(callback: () => void): void;
   onInboxChanged(callback: () => void): void;
@@ -52,7 +56,66 @@ interface SortApi {
   onNotice(callback: (notice: { level: "info" | "error"; message: string }) => void): void;
 }
 
-const api = (window as unknown as { waypoint: { sort: SortApi } }).waypoint.sort;
+/**
+ * 008: the suggestion API, **optional**.
+ *
+ * Absent from `window.waypoint` entirely when no transport is configured, so
+ * the check below is the only thing standing between a configured machine and
+ * an unconfigured one. There is no disabled state to render and no capability
+ * flag to consult — the verb is either there or it is not (FR-060).
+ */
+interface PrepareResult {
+  ok: boolean;
+  id?: string;
+  payload?: string;
+  reason?: string;
+  message?: string;
+}
+
+interface ProposedPiece {
+  text: string;
+  segments: number[];
+}
+
+interface SplitProposal {
+  pieces: ProposedPiece[];
+  uncovered: string[];
+  nothingToSplit: boolean;
+}
+
+interface DestinationProposal {
+  decision: SortDecision;
+  reason: string;
+  isNew: boolean;
+}
+
+type Proposal = SplitProposal | DestinationProposal;
+
+/** Which kind came back. The two are told apart by shape, not by a flag. */
+function isSplit(proposal: Proposal): proposal is SplitProposal {
+  return "pieces" in proposal;
+}
+
+interface SuggestApi {
+  available(): Promise<boolean>;
+  prepareSplit(item: {
+    text: string;
+    capturedAt: string | null;
+    ref: ItemRef;
+  }): Promise<PrepareResult>;
+  prepareDestination(text: string): Promise<PrepareResult>;
+  run(
+    id: string,
+  ): Promise<
+    | { ok: true; proposal: Proposal }
+    | { ok: false; reason: string; message: string }
+  >;
+  abandon(id: string): void;
+}
+
+const bridge = (window as unknown as { waypoint: { sort: SortApi; suggest?: SuggestApi } }).waypoint;
+const api = bridge.sort;
+const suggest = bridge.suggest;
 
 const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -64,6 +127,7 @@ const textEl = el("text");
 const stage = el("stage");
 const choices = el("choices");
 const panel = el("panel");
+const assist = el("assist");
 const notice = el("notice");
 const hint = el("hint");
 const progressBar = document.querySelector("#progress i") as HTMLElement;
@@ -132,6 +196,8 @@ async function showNext(): Promise<void> {
 
   if (response.item === null) {
     currentRef = null;
+    currentItem = null;
+    clearAssist();
     sorting.hidden = true;
     emptyState.hidden = false;
     remaining.textContent = "";
@@ -141,6 +207,10 @@ async function showNext(): Promise<void> {
 
   const { text, capturedAt: at, ref } = response.item;
   currentRef = ref;
+  currentItem = response.item;
+  // A proposal belongs to the item it was made about. Moving on drops it —
+  // nothing about a request survives the item it was for (008 FR-046).
+  clearAssist();
 
   // A hand-written item has no capture time and never gets a fabricated one
   // (FR-027a) — the line is simply left empty.
@@ -334,6 +404,402 @@ function openWaitingPanel(): void {
   panel.replaceChildren(row);
   syncHint();
   input.focus();
+}
+
+// ---------------------------------------------------------------------------
+// 008: asking for help, and deciding what to do with the answer
+// ---------------------------------------------------------------------------
+
+/** The item currently on screen, as the suggestion service needs it. */
+let currentItem: { text: string; capturedAt: string | null; ref: ItemRef } | null = null;
+/** The prepared-but-unsent request, if the preview is showing. */
+let prepared: { id: string; payload: string } | null = null;
+
+/**
+ * The ask row. Rendered **only** when the bridge exposed the verbs.
+ *
+ * Not hidden when unavailable — never created. A user who has configured
+ * nothing sees the sort view Feature 2 shipped, with no sign this exists.
+ */
+function renderAsk(): void {
+  if (!suggest || !currentItem) {
+    assist.replaceChildren();
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "ask";
+
+  const split = document.createElement("button");
+  split.type = "button";
+  split.id = "to-split";
+  split.textContent = "Split this up";
+  split.addEventListener("click", () => void askFor("split"));
+
+  const where = document.createElement("button");
+  where.type = "button";
+  where.id = "to-where";
+  where.textContent = "Where does this go?";
+  where.addEventListener("click", () => void askFor("destination"));
+
+  row.append(split, where);
+  assist.replaceChildren(row);
+}
+
+function clearAssist(): void {
+  if (prepared) {
+    // Leaving a request in flight would let an answer arrive against an item
+    // that is no longer on screen.
+    suggest?.abandon(prepared.id);
+    prepared = null;
+  }
+  renderAsk();
+}
+
+/**
+ * Step one: prepare, and show exactly what would be sent.
+ *
+ * Nothing has left the machine at the end of this function. The send is the
+ * user's separate, explicit act, taken with the content readable (FR-041).
+ */
+async function askFor(kind: "split" | "destination"): Promise<void> {
+  if (!suggest || !currentItem) return;
+  clearNotice();
+
+  const result =
+    kind === "split"
+      ? await suggest.prepareSplit(currentItem)
+      : await suggest.prepareDestination(currentItem.text);
+
+  if (!result.ok || result.id === undefined || result.payload === undefined) {
+    // `not-configured` carries no message and cannot arrive here anyway: the
+    // control that produced this call does not exist in that state.
+    if (result.message) say(result.message, "error");
+    return;
+  }
+
+  prepared = { id: result.id, payload: result.payload };
+  renderPreview(result.payload);
+}
+
+function renderPreview(payload: string): void {
+  const label = document.createElement("p");
+  label.id = "preview-label";
+  label.textContent = "This is exactly what would be sent:";
+
+  const pre = document.createElement("pre");
+  pre.id = "preview";
+  // `textContent`, so the payload is shown as text and nothing in it can
+  // render as markup.
+  pre.textContent = payload;
+
+  const row = document.createElement("div");
+  row.className = "ask";
+
+  const send = document.createElement("button");
+  send.type = "button";
+  send.id = "send";
+  send.textContent = "Send it";
+  send.addEventListener("click", () => void runPrepared());
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.id = "cancel-send";
+  cancel.textContent = "Never mind";
+  cancel.addEventListener("click", clearAssist);
+
+  row.append(send, cancel);
+  assist.replaceChildren(label, pre, row);
+}
+
+/** Step two: the send, and whatever comes back. */
+async function runPrepared(): Promise<void> {
+  if (!suggest || !prepared) return;
+  const { id } = prepared;
+
+  const waiting = document.createElement("div");
+  waiting.className = "ask";
+  const stop = document.createElement("button");
+  stop.type = "button";
+  stop.id = "abandon";
+  stop.textContent = "Waiting… stop";
+  // Abandoning is available for the whole of the request, not only at the
+  // bound. One mechanism, two triggers (FR-066).
+  stop.addEventListener("click", () => {
+    suggest.abandon(id);
+    prepared = null;
+    renderAsk();
+  });
+  waiting.append(stop);
+  assist.replaceChildren(waiting);
+
+  const outcome = await suggest.run(id);
+  prepared = null;
+
+  if (!outcome.ok) {
+    // One message. No retry — asking again is the user's to do (FR-065).
+    say(outcome.message, "error");
+    renderAsk();
+    return;
+  }
+
+  if (isSplit(outcome.proposal)) renderSplitProposal(outcome.proposal);
+  else renderDestinationProposal(outcome.proposal);
+}
+
+/** How a decision reads to a person, in Feature 2's own five words. */
+function describe(decision: SortDecision, isNew: boolean): string {
+  switch (decision.to) {
+    case "project":
+      return "slug" in decision ? `Project: ${decision.slug}` : `New project: “${decision.createTitle}”`;
+    case "area":
+      return "slug" in decision ? `Area: ${decision.slug}` : `New area: “${decision.createTitle}”`;
+    case "waiting":
+      return "Waiting for";
+    case "calendar":
+      return "Calendar";
+    case "trash":
+      return "Trash";
+    default:
+      void isNew;
+      return "";
+  }
+}
+
+/**
+ * One destination, with its reason.
+ *
+ * Accepting calls `sort.decide` — the channel a manual choice already uses,
+ * with the decision the proposal carried. There is no assisted path to a
+ * destination because there is no second channel to one (FR-030, FR-031).
+ */
+function renderDestinationProposal(proposal: DestinationProposal): void {
+  const box = document.createElement("div");
+  box.id = "proposal";
+
+  const where = document.createElement("p");
+  where.id = "destination";
+  where.textContent = describe(proposal.decision, proposal.isNew);
+
+  if (proposal.isNew) {
+    // Marked distinctly, because confirming the creation of something is a
+    // different act from filing into something that already exists (FR-023).
+    const badge = document.createElement("span");
+    badge.id = "is-new";
+    badge.textContent = " — this does not exist yet";
+    where.append(badge);
+  }
+
+  const reason = document.createElement("p");
+  reason.className = "reason";
+  reason.id = "reason";
+  // Core's words, shown and never written (FR-032).
+  reason.textContent = proposal.reason;
+
+  box.append(where, reason);
+
+  /**
+   * A waiting-for owner is editable before acceptance, and may well be empty:
+   * the model is not allowed to invent a name the item never said, and `sort()`
+   * refuses an empty owner — so this is where the user supplies it (FR-025).
+   */
+  let ownerField: HTMLInputElement | null = null;
+  if (proposal.decision.to === "waiting") {
+    ownerField = document.createElement("input");
+    ownerField.type = "text";
+    ownerField.id = "proposed-owner";
+    ownerField.autocomplete = "off";
+    ownerField.placeholder = "Who is it waiting on?";
+    ownerField.value = proposal.decision.owner;
+
+    const row = document.createElement("div");
+    row.className = "row";
+    row.append(ownerField);
+    box.append(row);
+  }
+
+  const row = document.createElement("div");
+  row.className = "ask";
+
+  const accept = document.createElement("button");
+  accept.type = "button";
+  accept.id = "accept-destination";
+  accept.textContent = proposal.isNew ? "Create it and file here" : "File it here";
+  accept.addEventListener("click", () => {
+    const decision: SortDecision =
+      proposal.decision.to === "waiting"
+        ? { to: "waiting", owner: ownerField?.value ?? "" }
+        : proposal.decision;
+    clearAssist();
+    void decide(decision);
+  });
+
+  const other = document.createElement("button");
+  other.type = "button";
+  other.id = "choose-other";
+  other.textContent = "Somewhere else";
+  other.addEventListener("click", () => {
+    // Back to the five buttons Feature 2 shipped. Rejecting a proposal does
+    // not take the ordinary path away with it.
+    clearAssist();
+    say("");
+    clearNotice();
+  });
+
+  const reject = document.createElement("button");
+  reject.type = "button";
+  reject.id = "reject-destination";
+  reject.textContent = "Reject";
+  reject.addEventListener("click", clearAssist);
+
+  row.append(accept, other, reject);
+  box.append(row);
+  assist.replaceChildren(box);
+}
+
+/**
+ * The proposal, as editable text.
+ *
+ * Once it is on screen it is ordinary text: `sort.split()` takes strings, so
+ * an edited piece and a proposed one are the same kind of thing to the write
+ * path, and nothing records which is which (FR-015, FR-032).
+ */
+function renderSplitProposal(proposal: SplitProposal): void {
+  const box = document.createElement("div");
+  box.id = "proposal";
+
+  if (proposal.nothingToSplit) {
+    const line = document.createElement("p");
+    line.className = "reason";
+    line.textContent = "This looks like one thought. Nothing to split.";
+
+    const row = document.createElement("div");
+    row.className = "ask";
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.id = "reject-split";
+    ok.textContent = "OK";
+    ok.addEventListener("click", clearAssist);
+    row.append(ok);
+
+    // No accept button at all: there is nothing to accept, and offering one
+    // would invite a write that changes nothing (FR-011).
+    box.append(line, row);
+    assist.replaceChildren(box);
+    return;
+  }
+
+  /** Which pieces the user has dropped. Local to this proposal. */
+  const dropped = new Set<number>();
+
+  const list = document.createElement("div");
+  const uncovered = document.createElement("div");
+  uncovered.id = "uncovered";
+
+  const textareas: HTMLTextAreaElement[] = [];
+
+  const refreshUncovered = (): void => {
+    // Core computed which segments no piece names. Dropping a piece here adds
+    // its text to that — the arithmetic stays core's, and the client only adds
+    // what the user just removed.
+    const missing = [
+      ...proposal.uncovered,
+      ...[...dropped].sort((a, b) => a - b).map((i) => proposal.pieces[i]?.text ?? ""),
+    ].filter((t) => t.trim().length > 0);
+
+    if (missing.length === 0) {
+      uncovered.hidden = true;
+      uncovered.replaceChildren();
+      return;
+    }
+
+    const heading = document.createElement("strong");
+    heading.textContent = "This is not carried into any piece:";
+    const ul = document.createElement("ul");
+    for (const text of missing) {
+      const li = document.createElement("li");
+      li.textContent = text.trim();
+      ul.append(li);
+    }
+    uncovered.replaceChildren(heading, ul);
+    uncovered.hidden = false;
+  };
+
+  proposal.pieces.forEach((piece, index) => {
+    const row = document.createElement("div");
+    row.className = "piece";
+
+    const area = document.createElement("textarea");
+    area.rows = Math.min(4, piece.text.split("\n").length + 1);
+    area.value = piece.text.trim();
+    textareas.push(area);
+
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "drop";
+    drop.textContent = "Drop";
+    drop.addEventListener("click", () => {
+      if (dropped.has(index)) dropped.delete(index);
+      else dropped.add(index);
+      row.classList.toggle("dropped", dropped.has(index));
+      area.disabled = dropped.has(index);
+      drop.textContent = dropped.has(index) ? "Keep" : "Drop";
+      refreshUncovered();
+    });
+
+    row.append(area, drop);
+    list.append(row);
+  });
+
+  const row = document.createElement("div");
+  row.className = "ask";
+
+  const accept = document.createElement("button");
+  accept.type = "button";
+  accept.id = "accept-split";
+  accept.textContent = "Accept";
+  accept.addEventListener("click", () => {
+    const kept = textareas.filter((_, i) => !dropped.has(i)).map((t) => t.value);
+    void acceptSplit(kept);
+  });
+
+  const reject = document.createElement("button");
+  reject.type = "button";
+  reject.id = "reject-split";
+  reject.textContent = "Reject";
+  reject.addEventListener("click", clearAssist);
+
+  row.append(accept, reject);
+  box.append(list, uncovered, row);
+  refreshUncovered();
+  assist.replaceChildren(box);
+}
+
+/**
+ * The accept. One call to the same write path a user with no intelligence
+ * configured would reach by typing three pieces themselves.
+ */
+async function acceptSplit(pieces: string[]): Promise<void> {
+  if (!currentRef || deciding) return;
+  setBusy(true);
+  clearNotice();
+
+  const outcome = await api.split(currentRef, pieces);
+  setBusy(false);
+
+  if (outcome.ok) {
+    clearAssist();
+    await showNext();
+    return;
+  }
+
+  // Core's words, unchanged. A client that reworded a refusal would be a
+  // second vocabulary for the same event.
+  say(outcome.message, "error");
+  if (outcome.reason === "item-changed") {
+    clearAssist();
+    await showNext();
+  }
 }
 
 el("to-project").addEventListener("click", () => void openDestinationPicker("project"));

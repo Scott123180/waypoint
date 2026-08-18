@@ -11,9 +11,13 @@ export class FakeInboxDocument implements InboxDocument {
   content: string;
   /** Set to throw on the next write. */
   failNextWrite = false;
-  /** Appended to the document immediately before the next removeRange commits. */
+  /** Appended to the document immediately before the next splice commits. */
   concurrentAppend: string | undefined;
+  /** Reports a mismatch on the next splice even if the bytes match. */
+  forceMismatch = false;
   removeCalls = 0;
+  /** 008: counted separately, so "a split is exactly one write" is assertable. */
+  replaceCalls = 0;
 
   constructor(content = "") {
     this.content = content;
@@ -23,12 +27,33 @@ export class FakeInboxDocument implements InboxDocument {
     return Promise.resolve(this.content);
   }
 
-  removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch"> {
+  // `async` so a simulated failure arrives as a rejected promise, exactly as
+  // an I/O error from the real adapter would.
+  async removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch"> {
     this.removeCalls += 1;
+    return this.splice(start, end, expected, "") === "spliced" ? "removed" : "mismatch";
+  }
 
+  /** 008 research R8. Same splice, non-empty replacement. */
+  async replaceRange(
+    start: number,
+    end: number,
+    expected: string,
+    replacement: string,
+  ): Promise<"replaced" | "mismatch"> {
+    this.replaceCalls += 1;
+    return this.splice(start, end, expected, replacement) === "spliced" ? "replaced" : "mismatch";
+  }
+
+  private splice(
+    start: number,
+    end: number,
+    expected: string,
+    replacement: string,
+  ): "spliced" | "mismatch" {
     if (this.failNextWrite) {
       this.failNextWrite = false;
-      return Promise.reject(new Error("simulated inbox write failure"));
+      throw new Error("simulated inbox write failure");
     }
 
     // A capture landing between our read and our write. A correct
@@ -38,12 +63,21 @@ export class FakeInboxDocument implements InboxDocument {
       this.concurrentAppend = undefined;
     }
 
+    if (this.forceMismatch) {
+      this.forceMismatch = false;
+      return "mismatch";
+    }
+
     const buf = Buffer.from(this.content, "utf8");
     const actual = buf.subarray(start, end).toString("utf8");
-    if (actual !== expected) return Promise.resolve("mismatch");
+    if (actual !== expected) return "mismatch";
 
-    this.content = Buffer.concat([buf.subarray(0, start), buf.subarray(end)]).toString("utf8");
-    return Promise.resolve("removed");
+    this.content = Buffer.concat([
+      buf.subarray(0, start),
+      Buffer.from(replacement, "utf8"),
+      buf.subarray(end),
+    ]).toString("utf8");
+    return "spliced";
   }
 }
 

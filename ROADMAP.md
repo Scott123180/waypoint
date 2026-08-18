@@ -245,18 +245,62 @@ Plain-text, git-tracked, stored **outside** the application repo:
       performance conversations, 1:1s. Reads the completion dates Feature 3
       records when a milestone or project is marked done; captures nothing
       new of its own)
-- [ ] **Feature 8 — LLM-assisted inbox organization** — **next** (splits messy
+- [x] **Feature 8 — LLM-assisted inbox organization** — **shipped** (splits messy
       dictated streams into distinct items, suggests project/area/
       waiting-for placement; suggest-don't-decide, human confirms during
-      sort). **Built on the intelligence layer described in Architecture, not
-      on the API**: core declares the split and destination-suggestion ports
-      beside Feature 5's summary port, the default intelligence module
-      implements them, and a configured transport carries the calls. This
-      feature is where the module and the first transports arrive. It keeps the
-      degrade-to-nothing contract — with no transport configured, sort behaves
-      exactly as Feature 2 shipped it. Numbered 8 before it was resequenced
-      ahead of Feature 7; the number is kept because specs and code already
-      cite it
+      sort). Built on the intelligence layer described in Architecture, not on
+      the API, and it kept the degrade-to-nothing contract: with no transport
+      configured, sort is byte-for-byte what Feature 2 shipped. Numbered 8
+      before it was resequenced ahead of Feature 7; the number is kept because
+      specs and code already cite it.
+
+      What shipped:
+
+      - **`intelligence.md` at the vault root**, absent by default and absent
+        in every vault that exists today — which is what made shipping this a
+        no-op for data already on disk. It names a transport and its non-secret
+        parameters, and the *path* to a credential, never the material: there
+        is no field a private key could be written into, so "the data directory
+        stays safe to commit" is a property of the format rather than a warning
+      - **Two transports**, chosen because their failure modes are unalike —
+        `command` (spawn, request on stdin) and `certificate` (`node:https`
+        with client-certificate authentication). Exit codes and stderr tails
+        against TLS handshakes and HTTP statuses. That is what shows the
+        seven-member failure taxonomy is a real abstraction rather than one
+        implementation's error type renamed. **Neither adds a dependency.**
+        Never probed: no PATH check, no scan for a listening local model, no
+        environment variable, no editor-host detection
+      - **The segment-number technique**, which is the load-bearing idea. The
+        model is shown the item partitioned into numbered segments and answers
+        with *numbers*; core slices the original to build each piece. A piece
+        containing words the user did not say is not something a validator
+        catches — it is something the data path cannot produce, because text
+        from the response is never handled. "Nothing dictated was dropped"
+        becomes set arithmetic over indices rather than a similarity score
+      - **`SortService.split(ref, pieces)`** — one atomic `replaceRange`, no
+        journal entry (one file, so the rename already gives all-or-nothing).
+        It takes *strings*, so it cannot tell whether they came from a
+        proposal, an edit of one, or a user with nothing configured typing
+        three pieces by hand. That is what makes "no behaviour exists only on
+        the assisted path" a fact about the signature
+      - **The payload is one value.** A request is *prepared* into a
+        `PreparedRequest` holding the exact content and a `run()` closed over
+        it, so "what you were shown is what was sent" is asserted with `===`
+        rather than deep equality. `contracts/intelligence-ports.md` originally
+        gave providers a single `propose()` that rendered and sent in one call;
+        that shape cannot satisfy the preview and identity requirements
+        together, and the deviation is recorded in the plan
+      - **Five decision points, unchanged.** A proposal the user is free to
+        reject holds no opinion the system enforces, so there was nothing for a
+        sixth point to decide. `SuggestionServiceDeps` has no `policy` field —
+        absent rather than injected-and-unused, so consulting a rule from here
+        would take a visible constructor change
+      - **Feature 5's `SummaryProvider` is still unimplemented**, and this
+        entry previously implied Feature 8 would supply one. It does not: the
+        weekly-review summary was explicitly excluded from scope. The port is
+        left as it is rather than quietly filled, and the review still
+        completes normally with no provider, offline, showing no summary
+        affordance at all
 - [ ] **Feature 7 — Local HTTP/JSON API** — **deferred, unscheduled** (exposes
       core verbs so non-GUI clients can call capture/sort/review/etc.). Its
       original justification was giving an AI agent a way in without fragile UI

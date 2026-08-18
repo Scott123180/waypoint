@@ -184,3 +184,52 @@ export type {
   UnreadableReason,
 } from "./retrospective/types";
 export { weekEnd } from "./weekly/iso-week";
+
+/**
+ * The intelligence layer.
+ *
+ * Two seams: `SplitProvider` and `DestinationProvider` say *what intelligence
+ * does* in Waypoint's own vocabulary, and `Transport` says *how a model is
+ * reached* while knowing nothing about task management. Between them sits
+ * `createDefaultIntelligence`.
+ *
+ * Internal by intent, like the policy and summary seams before it. These types
+ * are exported so the project can use the seams deliberately, not so a third
+ * party can register against them: there is no loader, no discovery mechanism,
+ * and no public extension API (008 FR-057).
+ *
+ * Absent configuration means the layer is off, silently — which is the state of
+ * every vault that exists today (008 FR-054).
+ */
+export type {
+  SplitProvider,
+  DestinationProvider,
+  Transport,
+  PreparedProposal,
+  SplitRequest,
+  SplitResponse,
+  DestinationRequest,
+  DestinationResponse,
+} from "./ports/index";
+export { createDefaultIntelligence } from "./intelligence/default-intelligence";
+export { SuggestionService, SUGGESTION_TIMEOUT_MS } from "./suggest/suggestion-service";
+export type { SuggestionServiceDeps } from "./suggest/suggestion-service";
+export { catalogOf } from "./suggest/catalog";
+export type { DestinationCatalog, CatalogDir } from "./suggest/catalog";
+export {
+  INTELLIGENCE_PATH,
+  TRANSPORTS,
+  parseIntelligenceConfig,
+} from "./suggest/intelligence-config";
+export type { IntelligenceConfig, TransportName } from "./suggest/intelligence-config";
+export { SUGGESTION_FAILURES } from "./suggest/types";
+export type {
+  SuggestionFailure,
+  SplitProposal,
+  ProposedPiece,
+  DestinationProposal,
+  SplitOutcome,
+  DestinationOutcome,
+  PreparedRequest,
+  PrepareResult,
+} from "./suggest/types";

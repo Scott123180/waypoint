@@ -3,6 +3,7 @@ import { parseInbox, type ParsedItem } from "../inbox/parse";
 import { slugify, uniqueSlug } from "../vault/slug";
 import { renderStub } from "../vault/stub";
 import { commitDecision, recoverPending, type CommitDeps } from "./commit";
+import { bytesUnchanged, renderPieces, usablePieces } from "./split";
 import type { SortJournalEntry } from "./journal";
 import type {
   DestinationRef,
@@ -188,6 +189,85 @@ export class SortService {
     const slug = uniqueSlug(base, existing);
     await this.deps.vault.write(`${dir}/${slug}.md`, renderStub(title));
     return { slug };
+  }
+
+  /**
+   * Replaces one inbox item with several, atomically.
+   *
+   * Takes strings. It cannot tell whether they came from a proposal, from an
+   * edit of one, or from a client with no intelligence configured at all —
+   * which is what makes "nothing exists only on the assisted path" a fact
+   * about this signature rather than a claim (008 FR-031).
+   *
+   * **No journal entry.** One byte range in one file, through an atomic
+   * temp-plus-rename, so 008 FR-014's all-or-nothing is the rename's own
+   * guarantee. The journal exists because a destination commit touches two
+   * files and POSIX cannot update both atomically; adding it here would create
+   * a crash window that does not otherwise exist, with a recovery path whose
+   * triggering state is unreachable and therefore untestable (008 research R9).
+   */
+  async split(ref: ItemRef, pieces: string[]): Promise<SortOutcome> {
+    const usable = usablePieces(pieces);
+    if (usable.length === 0) {
+      // Refused rather than treated as a delete. Emptying an item by proposing
+      // nothing would be the one destructive thing this path could do, and
+      // discarding already has a verb: sort it to trash (008 FR-019).
+      return {
+        ok: false,
+        reason: "empty-pieces",
+        message: "A split needs at least one piece with something in it. Nothing was written.",
+      };
+    }
+
+    const item = itemFromRef(ref);
+    if (!item) {
+      return {
+        ok: false,
+        reason: "item-changed",
+        message: "The item could not be read back from the inbox; nothing was written.",
+      };
+    }
+
+    // The same verification `sort()` performs, from the same place, so an item
+    // hand-edited between the proposal and the accept is refused identically
+    // (008 FR-018).
+    if (!bytesUnchanged(await this.deps.inbox.read(), ref)) {
+      return {
+        ok: false,
+        reason: "item-changed",
+        message:
+          "The item changed on disk since it was shown, so nothing was written. " +
+          "Here it is as it now reads.",
+      };
+    }
+
+    let result: "replaced" | "mismatch";
+    try {
+      result = await this.deps.inbox.replaceRange(
+        ref.start,
+        ref.end,
+        ref.raw,
+        renderPieces(usable, item.capturedAt),
+      );
+    } catch {
+      return {
+        ok: false,
+        reason: "write-failed",
+        message: "The inbox could not be written. Nothing was changed.",
+      };
+    }
+
+    if (result === "mismatch") {
+      return {
+        ok: false,
+        reason: "item-changed",
+        message:
+          "The item changed on disk since it was shown, so nothing was written. " +
+          "Here it is as it now reads.",
+      };
+    }
+
+    return { ok: true, destination: `${usable.length} items` };
   }
 
   /**

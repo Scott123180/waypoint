@@ -6,6 +6,7 @@
  */
 
 import type { ResolvedDri } from "../identity/types";
+import type { SortDecision } from "../sort/decision";
 
 /** Appends bytes to the inbox and reports where they landed. */
 export interface InboxStore {
@@ -137,6 +138,28 @@ export interface InboxDocument {
    * landing mid-removal has to survive it (FR-020e, research R4a).
    */
   removeRange(start: number, end: number, expected: string): Promise<"removed" | "mismatch">;
+
+  /**
+   * Replaces bytes [start, end) with `replacement` — but only if what is
+   * currently there exactly equals `expected`. Returns 'mismatch' without
+   * writing anything otherwise.
+   *
+   * Added by 008 for `SortService.split`, with exactly the guarantees
+   * `removeRange` documents above: atomic to a reader, and never discarding a
+   * concurrent append. Strictly additive — `removeRange` keeps its signature
+   * and its behaviour, and implementations share one splice so the two cannot
+   * drift (008 research R8).
+   *
+   * A split is **one** call to this. That is what makes 008 FR-014's
+   * all-or-nothing the rename's own guarantee rather than a journalled
+   * two-step with a crash window between the halves (008 research R9).
+   */
+  replaceRange(
+    start: number,
+    end: number,
+    expected: string,
+    replacement: string,
+  ): Promise<"replaced" | "mismatch">;
 }
 
 /**
@@ -351,4 +374,134 @@ export interface ProjectSummaryLike {
   slug: string;
   title: string;
   status: ProjectStatusLike;
+}
+
+// ---------------------------------------------------------------------------
+// The intelligence seams
+// ---------------------------------------------------------------------------
+
+/**
+ * Seam one: *what intelligence does*, in Waypoint's own vocabulary.
+ *
+ * Two ports rather than one, because FR-003 requires the two kinds of help to
+ * be independently requestable and asking for one must not send the other's
+ * content. Two interfaces make that a fact about the shape rather than a rule
+ * the caller has to keep.
+ *
+ * Ports in the strict sense the rest of this file means it: core declares the
+ * interface and the single call site, someone else supplies the behaviour.
+ * **Internal by intent** — no loader, no discovery, no registration API, the
+ * same restraint `PolicyModule` and `SummaryProvider` follow (008 FR-057).
+ *
+ * See specs/008-llm-assisted-inbox-organization/contracts/intelligence-ports.md
+ */
+
+/**
+ * A request rendered but not yet sent.
+ *
+ * The provider verb *prepares* rather than *proposes*, and this is why. FR-041
+ * requires the exact content to be shown before it is sent, and FR-045
+ * requires the shown content and the sent content to be the same value rather
+ * than two renderings compared for equality. A single `propose(request)` that
+ * both rendered and sent would leave a caller no way to read the payload
+ * except by rendering it a second time — which is the discrepancy FR-045
+ * forbids, reintroduced one layer down.
+ *
+ * `send` is a closure over the same `payload` binding this exposes. It takes
+ * only a signal: the content is already fixed, so there is no argument through
+ * which different content could be supplied (008 research R4).
+ *
+ * Preparing performs no I/O and sends nothing.
+ */
+export interface PreparedProposal<T> {
+  /** The exact content that would be sent. Rendered once, here. */
+  readonly payload: string;
+  send(signal: AbortSignal): Promise<T>;
+}
+
+/**
+ * Proposes how one inbox item divides into distinct thoughts.
+ *
+ * Returns groupings of *segment numbers*, never text. Core slices the original
+ * to build each piece, so a piece cannot contain words the user did not say —
+ * not because the provider is trusted, but because it never handles the text
+ * (008 FR-010a, 008 research R3).
+ */
+export interface SplitProvider {
+  /** Attribution, shown before the provider runs. Never written to disk. */
+  readonly name: string;
+  prepareSplit(request: SplitRequest): PreparedProposal<SplitResponse>;
+}
+
+export interface SplitRequest {
+  /** The item's own text. Nothing else about the vault (008 FR-042). */
+  readonly text: string;
+  /** The partition core computed. `segments.join("") === text`, byte for byte. */
+  readonly segments: ReadonlyArray<{ index: number; text: string }>;
+}
+
+export interface SplitResponse {
+  /** One array of segment indices per proposed piece. */
+  readonly pieces: ReadonlyArray<ReadonlyArray<number>>;
+  /** True when the item holds a single thought (008 FR-011). */
+  readonly nothingToSplit: boolean;
+}
+
+/**
+ * Proposes where one item — or one piece of a split one — belongs.
+ *
+ * Constrained to Feature 2's five destinations by reusing `SortDecision`. A
+ * sixth destination is not expressible, and neither is a hint that a machine
+ * proposed this one, because `SortDecision` has no field for either (008
+ * FR-020, 008 FR-032).
+ */
+export interface DestinationProvider {
+  readonly name: string;
+  prepareDestination(request: DestinationRequest): PreparedProposal<DestinationResponse>;
+}
+
+/**
+ * The whole payload boundary for a destination request.
+ *
+ * There is deliberately **no field** for a milestone, a next action, a DRI, a
+ * status, a ledger entry, an `## Unprocessed` item, another inbox item, or any
+ * configuration value. A provider that wanted them would have to change core to
+ * get them, which is a visible change rather than a quiet one — Feature 5's
+ * `ReviewRecord` discipline applied to a second port (008 FR-043).
+ */
+export interface DestinationRequest {
+  /** The item's or piece's own text. */
+  readonly item: string;
+  /** Title and stated outcome only. Nothing else from the project file. */
+  readonly projects: ReadonlyArray<{ slug: string; title: string; outcome: string | null }>;
+  /** Areas have no outcome, so a title alone. */
+  readonly areas: ReadonlyArray<{ slug: string; title: string }>;
+}
+
+export interface DestinationResponse {
+  readonly decision: SortDecision;
+  readonly reason: string;
+}
+
+/**
+ * Seam two: *how a model is reached*.
+ *
+ * Carries request content out and brings response content back. Nothing about
+ * projects, areas, inbox items, destinations, or sorting appears here, and
+ * nothing should ever be added: a transport that needed to know what it was
+ * carrying would be an intelligence module wearing the wrong interface.
+ *
+ * The 120-second bound is core's, not the transport's. Core arms one
+ * `AbortController` per request and passes its signal down; a transport honours
+ * it and implements no timeout of its own, so the one number cannot drift
+ * between two implementations (008 FR-066a, 008 research R15).
+ */
+export interface Transport {
+  /** Named for display in a failure message and in the preview. */
+  readonly name: string;
+  /**
+   * @param request the exact content to send
+   * @param signal aborted by core at 120 seconds, or when the user abandons
+   */
+  send(request: string, signal: AbortSignal): Promise<string>;
 }

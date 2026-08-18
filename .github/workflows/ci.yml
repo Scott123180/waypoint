@@ -43,3 +43,45 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # Feature 8's transports are the reason this job exists (008 research R19).
+  # The command transport touches subprocess handling and the certificate
+  # transport touches platform TLS — neither is assumed to be portable, and
+  # both are exercised by `npm test`:
+  #
+  #   - command-transport.test.ts spawns the fake CLI, writes stdin, kills on abort
+  #   - certificate-transport.test.ts stands up a real local HTTPS server with
+  #     client-certificate authentication, using key material the *running
+  #     platform's own* OpenSSL generates at test time
+  #
+  # macOS ships LibreSSL as `openssl`, which is exactly the difference worth
+  # catching. Those tests skip themselves when no usable `openssl` is present,
+  # so `WAYPOINT_REQUIRE_TLS_FIXTURES` is set here to turn that skip into a
+  # failure — a silent skip on the platform this job exists to check would make
+  # the job worthless while still showing green.
+  #
+  # Unit and contract tests only. End-to-end runs on Linux, where the display
+  # story is settled; nothing in the two transports is renderer-side.
+  test-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report the OpenSSL the fixtures will use
+        run: openssl version
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and contract tests
+        run: npm test
+        env:
+          WAYPOINT_REQUIRE_TLS_FIXTURES: "1"

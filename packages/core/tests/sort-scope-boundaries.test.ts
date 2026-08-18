@@ -17,6 +17,22 @@ const service = new SortService({
 });
 
 describe("out-of-scope guarantees", () => {
+  /**
+   * Amended 2026-08-17, when Feature 8 shipped LLM-assisted organization.
+   *
+   * `split` joins the expected surface. It is this feature's only write: one
+   * atomic `replaceRange` that divides an item into several. A separate
+   * `SplitService` was considered and rejected — it would hold the same
+   * `InboxDocument` and the same mutex and a copy of the item-changed
+   * verification, putting two writers on `inbox.md`, which is the hazard
+   * `inbox-mutex.ts` exists to remove (008 research R7).
+   *
+   * **The forbidden list below is unchanged, `suggest` included, and still
+   * passes.** That is the part of this guard that matters most here:
+   * suggesting is a different verb on a different service, so a client cannot
+   * reach a destination through a suggestion — it reaches a *proposal*, and
+   * then reaches `sort()` itself.
+   */
   test("the service offers no editing, reordering, bulk, or undo verb", () => {
     const surface = Object.getOwnPropertyNames(SortService.prototype).filter((n) => n !== "constructor");
 
@@ -29,6 +45,7 @@ describe("out-of-scope guarantees", () => {
       "recover",
       "resolveCreate",
       "sort",
+      "split",
     ]);
     for (const forbidden of ["edit", "reorder", "move", "undo", "bulk", "purge", "suggest"]) {
       assert.ok(
