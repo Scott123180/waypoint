@@ -257,7 +257,7 @@ identical proposals from identical stubbed responses.
 - [X] T073 [P] Confirm `DECISION_POINTS` is still five and no `DecisionContext` member was added (FR-034, SC-011)
 - [X] T074 [P] Update `ROADMAP.md`: tick Feature 8, record what shipped — `intelligence.md` in the vault root, the two transports, the segment-number technique that makes verbatim structural, the split verb on `SortService`, five decision points unchanged, and that Feature 5's summary port is still unimplemented and why
 - [X] T075 [P] Run every quickstart scenario 1–12 by hand on Linux and record any divergence in [quickstart.md](./quickstart.md). Scenario 4 carries SC-006: time the untangling of a four-thought dictation into four correctly separated items and confirm it lands under 60 seconds of user time. This is a manual smoke measurement, not a unit test — the same treatment Feature 6 gave its ten-second first-entry budget
-- [ ] T076 Confirm the full suite, both transports included, passes on the macOS runner in GitHub Actions — the command transport touches subprocess handling and the certificate transport touches platform TLS, and neither is assumed portable (research R19)
+- [X] T076 Confirm the full suite, both transports included, passes on the macOS runner in GitHub Actions — the command transport touches subprocess handling and the certificate transport touches platform TLS, and neither is assumed portable (research R19)
 
   **Prepared, not confirmed (2026-08-17).** CI had no macOS job at all: `ci.yml`
   ran only on `ubuntu-latest`, and `release.yml`'s `macos-14` entry builds
@@ -276,9 +276,21 @@ identical proposals from identical stubbed responses.
   - The job prints `openssl version` before running, so the record says which
     implementation the fixtures were built with.
 
-  **What remains is a CI run**, which needs a push. Until this branch runs on
-  GitHub Actions, macOS is unverified and this task stays open. Nothing was
-  committed or pushed as part of the implementation.
+  **Confirmed 2026-08-18**, run 32131322096 on commit `54d0d90`: `test-macos`
+  green on `macos-14` with `WAYPOINT_REQUIRE_TLS_FIXTURES=1`, so the TLS
+  fixtures were built and exercised rather than skipped, and `test` green on
+  `ubuntu-latest` (2229 unit, 230 e2e). Both transports run on both platforms.
+
+  **One caveat, recorded rather than smoothed over.** The macOS job failed on
+  the preceding run (32130624063) with a single assertion inside the nested
+  pre-existing suite, and that failure was never diagnosed: `execFileSync`
+  threw with the command as its message and discarded the child's output, so
+  the log did not say which test failed. The next run passed. The failure was
+  therefore **not fixed — it did not recur**, and something intermittent on
+  macOS remains unaccounted for. `spawnSync` now preserves the child's output
+  and the assertion names every failing subtest, so the next occurrence will
+  say what it was. A hard wall-clock budget under nested-run contention is the
+  suspicion; it is not evidence.
 
 ---
 
