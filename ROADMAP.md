@@ -363,8 +363,11 @@ spec because each one is a fix to something that already exists.
 
 ## Key decisions log
 
-- **Public repo** — portfolio piece, not monetized. If ever productized,
-  fork private and harden separately.
+- **Public repo** — portfolio piece, not monetized. Productizing later would
+  not require a private fork: as sole copyright holder the owner can dual-license
+  or relicense at will (see the MIT entry below). Forking private and hardening
+  separately remains a reasonable path for a production hardening effort — it is
+  a decision about scope and support, not about the license.
 - **Build machine rule** — all development happens on personal Ubuntu
   machine only. Work MacBook M4 never runs npm/pip installs or compiles
   anything (some corporate libraries are blocked). macOS builds are
@@ -482,27 +485,43 @@ spec because each one is a fix to something that already exists.
   architecture makes a free core plus default module, with third-party or
   commercial modules on top, possible later without rework. That option is worth
   preserving, so the repository license should be chosen on purpose rather than
-  inherited by default. ⚠ Currently unresolved: see below.
+  inherited by default. Resolved 2026-08-18: MIT, deliberately — see below.
+- **MIT, chosen rather than inherited (2026-08-18)** — `LICENSE` at the repo
+  root; the `license: "MIT"` already declared in the root, `packages/core` and
+  `packages/desktop` `package.json` files was the accidental default, and now
+  matches a license the repository actually grants. The reasoning: as sole
+  copyright holder the owner retains every right regardless of what is granted
+  to others, so MIT constrains third parties only and never the owner —
+  dual-licensing, relicensing and productizing all stay available. **Copyleft
+  (GPL/AGPL) was rejected for a specific reason**, not a vague one: it would
+  make a third party's in-process intelligence module or transport a derivative
+  work, forbidding proprietary modules and so destroying the open-core option
+  the two-seam architecture exists to preserve. Copyleft would protect the core
+  from commercial forks by closing the exact door open-core needs open. The
+  residual risk MIT accepts — someone commercially forking the core — is small
+  in practice for a personal task manager, and costs the owner nothing they
+  currently hold. `CONTRIBUTING.md` keeps the relicensing path clean:
+  contributions come in under MIT, and contributors agree the owner may
+  relicense the project including their contribution.
 
 ## Open questions raised by the policy layer
 
 Not decisions yet — things the policy layer surfaced that need answering before
 or during Feature 4.
 
-- **The license has already been chosen by default, which is the thing the
-  decision above says not to do.** `license: "MIT"` is declared in the root,
-  `packages/core`, and `packages/desktop` `package.json` files, and there is **no
-  `LICENSE` file in the repo at all**. So the current state is both accidental
-  and internally inconsistent: npm metadata claims MIT, the repository grants
-  nothing explicitly. MIT permits third parties to build commercial modules on
-  top — which open-core wants — but equally permits anyone to fork the core
-  itself commercially, which is the part worth deciding on purpose. Resolve the
-  declared license and add a real `LICENSE` file as one deliberate act.
-- **This partially supersedes the "Public repo" decision above**, which says
-  "portfolio piece, not monetized… if ever productized, fork private and harden
-  separately." The open-core entry contemplates commercial modules *without* a
-  private fork. Both entries are kept: the older one is the original intent, and
-  it should be rewritten rather than silently outgrown if open-core is pursued.
+- ~~**The license has already been chosen by default, which is the thing the
+  decision above says not to do.**~~ **Resolved (2026-08-18) — MIT, now on
+  purpose.** A real `LICENSE` file sits at the repo root and the three
+  `package.json` declarations were left alone, because MIT is the deliberate
+  choice and they now match it. The part worth deciding — that MIT equally
+  permits a commercial fork of the core — was decided knowingly: see the MIT
+  entry in the key decisions log for why copyleft would have cost more than that
+  risk is worth.
+- ~~**This partially supersedes the "Public repo" decision above**~~ **Resolved
+  (2026-08-18)** — the "Public repo" entry has been rewritten rather than left
+  to contradict the license decision. It keeps the portfolio-piece intent and
+  the not-monetized status, and drops the implication that productizing requires
+  a private fork; sole copyright ownership means it does not.
 - ~~**The data model has no notion of "me".**~~ **Resolved, and now shipped
   (2026-08-14).** `identity.md` in the vault root: a `me:` preamble field and an
   optional `## Aliases` list. Matching normalizes case, surrounding whitespace,
@@ -517,9 +536,9 @@ or during Feature 4.
   edited, so FR-009 stands exactly as Feature 3 wrote it. Guarded by
   `packages/core/tests/needs-dri.test.ts`, which asserts a project missing only
   a DRI has `gaps: []`.
-- **The license is still unresolved.** Feature 4 did not touch it. `license:
-  "MIT"` remains declared in three `package.json` files with no `LICENSE` file
-  in the repo — the accidental default the open-core decision says not to make.
-  Now more pressing, not less: the policy seam exists, so a free core plus
-  default module with third-party modules on top is a real option rather than a
-  hypothetical.
+- ~~**The license is still unresolved.**~~ **Resolved (2026-08-18), carried
+  since Feature 4.** MIT, deliberately: `LICENSE` at the repo root, a
+  `CONTRIBUTING.md` that keeps the relicensing path clean, and a README section
+  pointing at both. The free-core-plus-modules option the policy and
+  intelligence seams create is preserved rather than foreclosed — which is
+  precisely why copyleft was rejected. Full reasoning in the key decisions log.

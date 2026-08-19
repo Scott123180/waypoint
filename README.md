@@ -103,3 +103,8 @@ core will serve the planned HTTP API and agent integration without reimplementat
 macOS builds are produced by GitHub Actions on a macOS runner and published as
 release artifacts. Development happens on the Linux machine only — the work
 MacBook downloads finished builds and never compiles or installs packages.
+
+## License
+
+[MIT](LICENSE) — chosen deliberately, not inherited. Contributions are welcome
+under the same terms; see [CONTRIBUTING.md](CONTRIBUTING.md).
