@@ -200,9 +200,27 @@ describe("what this feature was allowed to change", () => {
    * Only `sort-scope-boundaries.test.ts` appears below: the baseline covers
    * `*.test.ts`, and the other two are helpers, which is precisely the
    * distinction the plan's prediction failed to draw.
+   *
+   * **2026-08-19, Feature 9.** A second entry joined the list, and it is not
+   * Feature 9's doing — the shutdown changed no pre-existing test. Cutting the
+   * 0.8.0 release surfaced a genuine O(n²) defect in `inbox/parse.ts`:
+   * `toLines` recomputed `Buffer.byteLength(doc)` once per line, so a
+   * 16,000-item inbox took 1.7s and every doubling of the input cost ~4x the
+   * time. `inbox-parse-perf.test.ts` existed to catch exactly that and could
+   * not: it took single un-warmed measurements and floored the baseline at 1ms,
+   * which inflated the denominator enough to let a quadratic parser slip under
+   * the threshold — so it failed intermittently on shared runners instead, and
+   * the intermittency was read as runner noise and answered by widening the
+   * tolerance. The test now takes the best of five runs at sizes well clear of
+   * timer resolution and carries no floor. It is a changed pre-existing test
+   * rather than a helper, so it is named here rather than folded into the
+   * paragraph above.
    */
-  test("exactly one pre-existing test file changed, and it is accounted for", () => {
-    assert.deepEqual(changed(), ["packages/core/tests/sort-scope-boundaries.test.ts"]);
+  test("exactly two pre-existing test files changed, and both are accounted for", () => {
+    assert.deepEqual(changed(), [
+      "packages/core/tests/inbox-parse-perf.test.ts",
+      "packages/core/tests/sort-scope-boundaries.test.ts",
+    ]);
   });
 
   test("the guards this feature must not have touched are untouched", () => {

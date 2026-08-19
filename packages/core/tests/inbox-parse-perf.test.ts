@@ -32,24 +32,41 @@ describe("parser performance", () => {
 
   test("scales roughly linearly, not quadratically", () => {
     // A naive implementation that re-encodes the whole buffer per line would
-    // pass the test above and fall over on a large inbox.
-    const time = (count: number): number => {
+    // pass the test above and fall over on a large inbox. `toLines` did
+    // exactly that until 2026-08-19: it recomputed `Buffer.byteLength(doc)`
+    // once per line, so 16,000 items took 1.7s and every doubling cost ~4x.
+    //
+    // **Best-of-N, not a single shot.** Jitter on a shared runner only ever
+    // *adds* time, so the minimum of several runs is the cleanest signal
+    // available and needs no artificial floor on the baseline. The previous
+    // floor (`Math.max(small, 1)`) was worse than noise: it inflated the
+    // denominator, and a sub-millisecond baseline could hide a genuinely
+    // quadratic parser under the threshold. That is how the defect above
+    // survived a test written to catch it.
+    const best = (count: number, runs = 5): number => {
       const doc = build(count);
-      const started = process.hrtime.bigint();
-      parseInbox(doc);
-      return Number(process.hrtime.bigint() - started) / 1e6;
+      let min = Infinity;
+      for (let run = 0; run < runs; run++) {
+        const started = process.hrtime.bigint();
+        parseInbox(doc);
+        min = Math.min(min, Number(process.hrtime.bigint() - started) / 1e6);
+      }
+      return min;
     };
 
-    time(500); // warm up
-    // Floor the baseline at 1ms: on a noisy shared runner, a sub-millisecond
-    // `small` measurement makes the ratio swing wildly even when scaling is
-    // in fact linear.
-    const small = Math.max(time(500), 1);
-    const large = time(4000);
+    // Both sizes are large enough that the measurement is well clear of timer
+    // resolution, so the ratio means something.
+    const small = best(2000);
+    const large = best(16000);
 
-    // 8x the input should not cost more than ~40x the time. Generous enough
-    // to absorb shared-runner jitter while still catching quadratic blowups
-    // (which would cost ~64x).
-    assert.ok(large / small < 40, `8x input cost ${(large / small).toFixed(1)}x time`);
+    // 8x the input costs ~8x the time when the parse is linear, and ~64x when
+    // it is quadratic. 30x sits between the two with room on both sides:
+    // generous enough to absorb runner jitter, tight enough that the defect
+    // this test exists to catch cannot slip under it.
+    const ratio = large / small;
+    assert.ok(
+      ratio < 30,
+      `8x input cost ${ratio.toFixed(1)}x time (${small.toFixed(1)}ms → ${large.toFixed(1)}ms)`,
+    );
   });
 });

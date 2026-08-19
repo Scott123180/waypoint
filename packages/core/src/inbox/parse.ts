@@ -77,11 +77,16 @@ interface Line {
 
 function toLines(doc: string): Line[] {
   const lines: Line[] = [];
+  // Measured once. Both of these were previously computed inside the loop —
+  // `Buffer.byteLength(doc)` walks the whole document, so paying for it per
+  // line made parsing quadratic: 16,000 items took 1.7s, and each doubling of
+  // the input cost ~4x the time. Neither value changes as the loop runs.
+  const docBytes = Buffer.byteLength(doc, "utf8");
   let offset = 0;
 
   for (const raw of doc.split("\n")) {
-    const withNewline = offset + Buffer.byteLength(raw, "utf8") < Buffer.byteLength(doc, "utf8");
     const byteLen = Buffer.byteLength(raw, "utf8");
+    const withNewline = offset + byteLen < docBytes;
     lines.push({
       text: raw,
       start: offset,
