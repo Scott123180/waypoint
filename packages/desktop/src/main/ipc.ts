@@ -22,11 +22,13 @@ import {
   type ReviewStepName,
   type PreparedRequest,
   type SortDecision,
+  type ShutdownService,
   type SortService,
   type SuggestionFailure,
   type SuggestionService,
   type TopThreeService,
   type WaitingRef,
+  type WaitingService,
 } from "@waypoint/core";
 
 import { renderReport } from "@waypoint/core";
@@ -669,3 +671,51 @@ export function registerRetrospectiveIpc(
 }
 
 export type SaveResponse = { saved: true; path: string } | { saved: false };
+
+/**
+ * The daily shutdown.
+ *
+ * Two channels of its own, and **neither writes**: `shutdown:read` returns the
+ * whole screen, and `shutdown:dismiss` hides the window the way every other
+ * view's does. Every action the screen offers goes to the channel the ordinary
+ * surface already uses — `top-three:complete`, `projects:complete-milestone`,
+ * `projects:set-field`, `capture:submit`, `capture:undo` — so there is nothing
+ * to register for them here.
+ *
+ * The two exceptions are the waiting verbs, and the reason is worth stating
+ * because it is the one way this feature could have quietly written a record of
+ * itself. Their only existing surface is the weekly review, whose
+ * `review:record-follow-up` calls `ReviewService.recordWaiting` — which
+ * delegates to `WaitingService` **and writes a line into `log/YYYY-Www.md`**.
+ * That log line is the review's record of its own ritual, and reaching it from
+ * here would write a record of the shutdown (009 FR-050).
+ *
+ * So these two are named for the **verb**, not for this screen, and call
+ * `WaitingService` directly. Any later surface uses the same ones.
+ *
+ * Deliberately absent: any channel that writes to `calendar.md`, clears a flag,
+ * or schedules anything. Calendar items are information only (009 FR-042), and
+ * there is no verb in core to expose even if a channel wanted to.
+ *
+ * See specs/009-daily-shutdown/contracts/shutdown-api.md §3, §4
+ */
+export function registerShutdownIpc(
+  shutdown: ShutdownService,
+  waiting: WaitingService,
+  hideShutdown: () => void,
+): void {
+  ipcMain.on("shutdown:dismiss", () => hideShutdown());
+
+  // No raising of the vault change signal here, and no subscription to one:
+  // `FsVaultStore` raises it from its write path, so a write made from this
+  // screen reaches every other open view with nothing to remember — and this
+  // window deliberately listens to none of it (009 FR-010a, FR-011a).
+  ipcMain.handle("shutdown:read", async () => shutdown.read());
+
+  ipcMain.handle("waiting:record-follow-up", async (_event, ref: WaitingRef) =>
+    waiting.recordFollowUp(ref),
+  );
+  ipcMain.handle("waiting:record-received", async (_event, ref: WaitingRef) =>
+    waiting.recordReceived(ref),
+  );
+}

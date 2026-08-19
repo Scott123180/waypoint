@@ -7,12 +7,14 @@ import {
   ProjectService,
   RetrospectiveService,
   ReviewService,
+  ShutdownService,
   SortService,
   TopThreeService,
   WaitingService,
   SuggestionService,
   catalogOf,
   createDefaultIntelligence,
+  createDefaultPolicy,
   parseIntelligenceConfig,
   INTELLIGENCE_PATH,
   type InboxWriteError,
@@ -35,6 +37,7 @@ import { ProjectsWindow } from "./projects-window";
 import { TopThreeWindow } from "./top-three-window";
 import { ReviewWindow } from "./review-window";
 import { RetrospectiveWindow } from "./retrospective-window";
+import { ShutdownWindow } from "./shutdown-window";
 import { configFilePath, currentEnv, loadConfig, sortJournalPath } from "./config";
 import { registerHotkeys, type Notice } from "./hotkey";
 import {
@@ -42,6 +45,7 @@ import {
   registerProjectsIpc,
   registerRetrospectiveIpc,
   registerReviewIpc,
+  registerShutdownIpc,
   registerSuggestIpc,
   registerTopThreeIpc,
 } from "./ipc";
@@ -164,6 +168,24 @@ async function start(): Promise<void> {
   });
 
   /**
+   * The daily shutdown: four readings composed into one screen.
+   *
+   * Reads five sources and writes none. Its dependencies are narrowed so that
+   * no write verb is reachable from it — the three services arrive as sources of
+   * one read verb each, and the vault as `read` alone (009 FR-053). The policy
+   * module is the shipped one, consulted for staleness and for nothing else; it
+   * is passed explicitly rather than defaulted because this service has no vault
+   * it could build one from.
+   */
+  const shutdownService = new ShutdownService({
+    projects: projectService,
+    topThree: topThreeService,
+    waiting: waitingService,
+    vault: vaultStore,
+    policy: createDefaultPolicy(vaultStore),
+  });
+
+  /**
    * 008: the intelligence layer, off unless `intelligence.md` says otherwise.
    *
    * Read from the vault — never probed. No `PATH` check, no scan for a
@@ -233,6 +255,9 @@ async function start(): Promise<void> {
   const retrospectiveWindow = new RetrospectiveWindow();
   const showRetrospective = (): void => retrospectiveWindow.show();
 
+  const shutdownWindow = new ShutdownWindow();
+  const showShutdown = (): void => shutdownWindow.show();
+
   // The sort view, and the review — whose inbox step reports a count it has to
   // re-derive after the user goes and sorts. Subscribers gather here rather
   // than each writer learning who is listening.
@@ -251,6 +276,11 @@ async function start(): Promise<void> {
   // waits. A reading is an answer taken at a moment, and re-rendering it under
   // the user would break the copy in their clipboard (006 FR-010a).
   vaultChanged.subscribe(() => retrospectiveWindow.vaultChanged());
+  // **The shutdown deliberately subscribes to neither signal.** Its membership
+  // is fixed when it opens, and a row moving under someone mid-pass would reopen
+  // a question they had already answered (009 FR-010a, FR-011a, research R7).
+  // Writes made *from* it still reach every view above, because they go through
+  // the same services and `FsVaultStore` raises the signal from its write path.
 
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
@@ -260,6 +290,7 @@ async function start(): Promise<void> {
   registerTopThreeIpc(topThreeService, () => topThreeWindow.hide());
   registerReviewIpc(reviewService, () => reviewWindow.hide(), showSort);
   registerRetrospectiveIpc(retrospectiveService, () => retrospectiveWindow.hide());
+  registerShutdownIpc(shutdownService, waitingService, () => shutdownWindow.hide());
 
   // 008: registered **only** when a transport is configured. With none, no
   // `suggest:*` channel exists at all — not a disabled one (FR-060).
@@ -312,6 +343,7 @@ async function start(): Promise<void> {
     onTopThree: showTopThree,
     onReview: showReview,
     onRetrospective: showRetrospective,
+    onShutdown: showShutdown,
     canUndo: () => service.undoableId() !== undefined,
   });
 
@@ -382,6 +414,9 @@ async function start(): Promise<void> {
       showRetrospective,
       hideReview: () => reviewWindow.hide(),
       isReviewVisible: () => reviewWindow.isVisible(),
+      showShutdown,
+      hideShutdown: () => shutdownWindow.hide(),
+      isShutdownVisible: () => shutdownWindow.isVisible(),
       undoLatest,
       setStubTranscript: (text: string) => {
         stubTranscript.value = text;

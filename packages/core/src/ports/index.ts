@@ -316,21 +316,34 @@ export interface ReviewInboxAdvanceContext {
 }
 
 /**
- * One point, two subjects.
+ * One point, three subjects.
  *
- * A delegated item that has gone quiet and a project parked in `waiting` are
- * the same rule applied to two things, and they share one threshold. Splitting
- * them into two points would make separate thresholds the easy next step;
- * keeping one means a contributor who wanted them to diverge has to change
- * `DECISION_POINTS`, where it is visible (005 research R6).
+ * A delegated item that has gone quiet, a project parked in `waiting`, and a
+ * thought flagged for the calendar and never scheduled are the same rule
+ * applied to three things, and they share one threshold. Splitting them into
+ * separate points would make separate thresholds the easy next step; keeping
+ * one means a contributor who wanted them to diverge has to change
+ * `DECISION_POINTS`, where it is visible (005 research R6, 009 research R5).
+ *
+ * Feature 9 widened `subject` and added nothing else. `DECISION_POINTS` is
+ * unchanged and still five.
  */
 export interface WaitingStaleContext {
   point: "waiting.stale.check";
-  /** For the message only. The rule and the threshold are identical for both. */
-  subject: "item" | "project";
+  /**
+   * Which kind of thing is being asked about.
+   *
+   * **The subject decides the message and never the decision.** The comparison,
+   * the inclusive boundary, the `allow` for an unreadable or future date, and
+   * the configured threshold are identical for all three. Where they differ is
+   * only in what the user can do about it: an item is chased, a project is
+   * parked, a flag is put in a calendar.
+   */
+  subject: "item" | "project" | "calendar";
   /**
    * Local date the subject was last touched: the last follow-up, or the date it
-   * started waiting; for a project, the date it entered `waiting`.
+   * started waiting; for a project, the date it entered `waiting`; for a
+   * calendar flag, the date it was flagged.
    *
    * A subject whose date is unknown is never asked — core does not substitute a
    * date to make the question askable (005 FR-094).

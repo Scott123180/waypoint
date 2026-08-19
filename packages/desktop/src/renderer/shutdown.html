@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>Daily shutdown</title>
+    <style>
+      /*
+        The same five tokens every other window uses, verbatim. Seven windows,
+        one tool (Principle VII).
+      */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b6b6b;
+        --border: #d8d8d8;
+        --error: #a4262c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --fg: #f2f2f2;
+          --muted: #9a9a9a;
+          --border: #3a3a3a;
+          --error: #ff9a9a;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+        overflow-y: auto;
+        padding: 20px 24px 32px;
+      }
+
+      h1 { font-size: 17px; margin: 0 0 2px; }
+      #today { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+      /*
+        Four panels, rendered together and never numbered.
+
+        No step, no sequence, no "next", no prerequisite, no progress indicator,
+        and no completion affordance — there is nothing here to complete
+        (FR-001, FR-002, FR-005). The headings are nouns for that reason: a
+        numbered list would imply an order, and an order would imply a wrong way
+        to read the screen.
+      */
+      section.panel { margin: 0 0 26px; }
+      section.panel > h2 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      ul { list-style: none; margin: 0; padding: 0; }
+
+      li.row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      li.row:last-child { border-bottom: none; }
+      li.row .text { flex: 1; word-break: break-word; white-space: pre-wrap; }
+      li.row.done .text { color: var(--muted); text-decoration: line-through; }
+      li.row .date, li.row .age, li.row .owner {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .detail { color: var(--muted); font-size: 13px; margin: 2px 0 0 0; }
+      .detail.actions { display: flex; gap: 6px; margin-top: 4px; }
+      .detail.row-error { color: var(--error); }
+      .next-action-input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; min-width: 260px; }
+      .detail.reason { white-space: pre-wrap; }
+      ul.milestones { margin: 4px 0 0 0; }
+      ul.milestones li { display: flex; gap: 8px; padding: 2px 0; border: none; }
+
+      .empty { color: var(--muted); padding: 6px 0; }
+      .failure { color: var(--error); padding: 6px 0; }
+
+      #notices { color: var(--error); font-size: 13px; margin: 0 0 16px; }
+      #notices div { margin-bottom: 4px; }
+
+      #unreadable-section h2 { color: var(--muted); }
+      .unreadable-line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .unreadable-line .lineno { color: var(--muted); margin-right: 8px; }
+
+      button {
+        font: inherit;
+        color: var(--fg);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 8px;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--muted); }
+      button.link { border: none; color: var(--muted); padding: 2px 4px; }
+
+      #error { color: var(--error); font-size: 13px; margin-top: 10px; min-height: 1.2em; }
+
+      #capture-row { display: flex; gap: 8px; }
+      #capture-text {
+        flex: 1;
+        font: inherit;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 8px;
+      }
+
+    </style>
+  </head>
+  <body>
+    <h1>Daily shutdown</h1>
+    <div id="today"></div>
+
+    <!-- The policy module's complaints about its own settings. Never blocking. -->
+    <div id="notices" role="status" hidden></div>
+
+    <section class="panel" id="panel-top-three">
+      <h2>This week's top three</h2>
+      <div class="empty" id="top-three-empty" hidden>
+        Nothing set for this week. That is a fine way to end the day too.
+      </div>
+      <div class="failure" id="top-three-failure" hidden></div>
+      <ul id="top-three"></ul>
+    </section>
+
+    <section class="panel" id="panel-projects">
+      <h2>Your active projects</h2>
+      <div class="empty" id="projects-empty" hidden>No active projects with you as DRI.</div>
+      <div class="failure" id="projects-failure" hidden></div>
+      <ul id="projects"></ul>
+    </section>
+
+    <section class="panel" id="panel-waiting">
+      <h2>Waiting on someone</h2>
+      <div class="empty" id="waiting-empty" hidden>Nothing has gone quiet.</div>
+      <div class="failure" id="waiting-failure" hidden></div>
+      <ul id="waiting"></ul>
+    </section>
+
+    <section class="panel" id="panel-calendar">
+      <h2>Flagged for the calendar</h2>
+      <div class="empty" id="calendar-empty" hidden>Nothing is waiting to be scheduled.</div>
+      <div class="failure" id="calendar-failure" hidden></div>
+      <ul id="calendar"></ul>
+    </section>
+
+    <!--
+      Lines neither grammar could read, shown so the user's own words do not go
+      quietly missing. Never rewritten, never counted, never acted on — they are
+      here so they can be fixed in an editor (FR-032).
+    -->
+    <section class="panel" id="unreadable-section" hidden>
+      <h2>Lines that could not be read</h2>
+      <ul id="unreadable"></ul>
+    </section>
+
+    <!--
+      The head-emptying box.
+
+      The ordinary capture verb on the ordinary channel, landing in the ordinary
+      inbox. It is a box on this screen rather than a step in a ritual: nothing
+      requires it, nothing checks whether it was used, and closing mid-typing
+      saves no draft (FR-043, FR-047).
+    -->
+    <section class="panel" id="panel-capture">
+      <h2>Anything still in your head</h2>
+      <div id="capture-row">
+        <input id="capture-text" type="text" placeholder="A thought to sort later" />
+        <button id="capture">Capture</button>
+      </div>
+    </section>
+
+    <div id="error" role="alert"></div>
+
+    <script src="./shutdown.js"></script>
+  </body>
+</html>

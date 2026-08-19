@@ -66,14 +66,24 @@ export class CountingVault {
  * for `write` would get `undefined is not a function`, which reads like a
  * mistake in the test. This says what actually happened.
  */
-export function readOnlyVault(files: Record<string, string>): ReadOnlyVault & CountingVault {
+export function readOnlyVault(
+  files: Record<string, string>,
+  /**
+   * How the guard names the feature that reached for a write.
+   *
+   * Parameterized by Feature 9 so a shutdown write path does not fail under the
+   * retrospective's name — a message naming the wrong requirement sends the
+   * next reader to the wrong spec. Defaults to the existing wording, so every
+   * retrospective test is behaviourally untouched.
+   */
+  guard: (prop: string) => string = (prop) =>
+    `the retrospective touched \`${prop}\` on the vault; it may only read (006 FR-051)`,
+): ReadOnlyVault & CountingVault {
   const target = new CountingVault(new Map(Object.entries(files)));
   return new Proxy(target, {
     get(obj, prop, receiver) {
       if (typeof prop === "string" && !ALLOWED.has(prop)) {
-        throw new Error(
-          `the retrospective touched \`${prop}\` on the vault; it may only read (006 FR-051)`,
-        );
+        throw new Error(guard(prop));
       }
       const value = Reflect.get(obj, prop, receiver);
       return typeof value === "function" ? value.bind(obj) : value;

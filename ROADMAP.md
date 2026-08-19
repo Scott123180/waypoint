@@ -311,10 +311,60 @@ Plain-text, git-tracked, stored **outside** the application repo:
       what an API would expose, so deferring it blocks nothing and costs no
       rework when it arrives. The existing guards that keep HTTP out of core
       (`packages/core/tests/project-scope-boundaries.test.ts`) stay as they are
-- [ ] **Feature 9 — Daily shutdown** (2-minute end-of-day: view top-three +
-      due waiting-for follow-ups, capture loose threads). Calendar-flagged
-      items carry a flag date so this feature can surface the ones left
-      unscheduled too long, the same way waiting-for goes stale
+- [x] **Feature 9 — Daily shutdown** — **shipped 2026-08-19** (2-minute
+      end-of-day: view top-three + due waiting-for follow-ups, capture loose
+      threads). Calendar-flagged items carry a flag date, and this feature
+      surfaces the ones left unscheduled too long, the same way waiting-for
+      goes stale.
+
+      What shipped:
+
+      - **Four panels, read at one moment, on one screen** — the current ISO
+        week's top three, the user's active projects with their next actions and
+        open milestones, waiting-for items past the staleness threshold, and
+        calendar flags past that same threshold. Unnumbered, in no sequence,
+        with no "next", no progress indicator, and no completion affordance,
+        because there is nothing here to complete
+      - **No on-disk representation at all.** No daily log, no state file, no
+        record of shutdowns run or skipped, and no notion of a day anywhere.
+        Nothing it writes is about the shutdown: every write is an ordinary
+        change to an outcome, a milestone, a next action, a waiting-for item, or
+        the inbox, indistinguishable from the same change made anywhere else.
+        `ShutdownServiceDeps` narrows `vault` to `Pick<VaultStore, "read">` and
+        the three services to structural read verbs, so a write does not compile
+      - **`calendar.md` read for the first time**, by a parser and two types with
+        **no write function anywhere in the module** — no append, no line
+        renderer, no `CalendarRef`, no service. That is the strongest available
+        form of "information only": there is no verb to misuse, and adding one
+        would be a visible edit to a file whose header says why it has none.
+        `calendarLine()`, the writer, stays in `vault/lists.ts` where sorting
+        owns it
+      - **One rule, three subjects.** `WaitingStaleContext.subject` widened to
+        `"item" | "project" | "calendar"` and `default-policy.ts` gained one
+        message branch. **`DECISION_POINTS` is unchanged and still five**;
+        `policy.md` gained no key, and one `staleness days` moves all three sets
+        together — asserted at every threshold from zero to 365
+      - **Every action is the verb the ordinary surface calls**, through the same
+        channel where one exists. The two waiting verbs got channels named for
+        the *verb* — `waiting:record-follow-up`, `waiting:record-received` —
+        rather than routing through `ReviewService`, which delegates to
+        `WaitingService` **and writes a review log line**. Reaching that from
+        here would have written a record of the shutdown while every test about
+        `waiting.md` still passed
+      - **The window subscribes to no change signal.** Membership is fixed when
+        the screen opens; an acted-on row updates in place from the verb's own
+        return value, never from a re-read. `shutdown:opened` is what makes the
+        second opening a cold one. Writes made *from* it still reach every other
+        open view, because `FsVaultStore` raises the signal from its write path
+      - **Opened only from the tray.** No schedule, timer, launch-on-open,
+        end-of-day trigger, or prompt exists anywhere, and nothing counts or
+        reports the days it was not opened — there is nowhere that count could
+        be kept
+      - **Undo is inherited, not re-offered.** Feature 1 scoped undo to
+        *dictated* captures and put the control in the tray; the capture box
+        renders none either. The plan read as though an undo affordance belonged
+        on this screen, and building one would have given the shutdown something
+        no other surface has. The deviation is recorded in the plan
 
 ## Known gaps
 

@@ -215,17 +215,20 @@ class DefaultPolicy implements PolicyModule {
   }
 
   /**
-   * The staleness check — one rule, asked about two kinds of subject.
+   * The staleness check — one rule, asked about three kinds of subject.
    *
-   * A delegated item nobody has chased and a project sitting in `waiting` are
-   * the same situation: something is blocked on someone else and time is
-   * passing. They share this decision point, this threshold, and this
-   * implementation, so they cannot be configured to disagree — that is
-   * structural rather than a promise (005 FR-080).
+   * A delegated item nobody has chased, a project sitting in `waiting`, and a
+   * thought flagged for the calendar and never scheduled are the same
+   * situation: something is not moving and time is passing. They share this
+   * decision point, this threshold, and this implementation, so they cannot be
+   * configured to disagree — that is structural rather than a promise (005
+   * FR-080, 009 FR-028).
    *
-   * `subject` reaches the wording and nothing else. Where the two differ is
+   * `subject` reaches the wording and nothing else. Where the three differ is
    * only in what the user can do about it: an item is chased, a project is
-   * parked.
+   * parked, a flag is put in a calendar. Note in particular that the
+   * remediation names what the *person* does — the application offers no
+   * scheduling verb, and this sentence must not imply one (009 FR-042).
    *
    * A `warn`, never a `block`. Staleness is a prompt: the review surfaces it
    * and says nothing about what to do, and nothing here changes a byte of
@@ -245,14 +248,22 @@ class DefaultPolicy implements PolicyModule {
     if (days < config.stalenessDays) return ALLOW;
 
     const noun = context.subject === "project" ? "This project has" : "This has";
+    // The elapsed-time clause differs for a flag because "waiting" alone would
+    // read as waiting on someone, which a calendar flag never is.
+    const elapsed =
+      context.subject === "calendar"
+        ? `been waiting to be scheduled for ${days} ${plural(days, "day")}`
+        : `been waiting ${days} ${plural(days, "day")}`;
     const next =
       context.subject === "project"
         ? "Chase it, or park it until it is really moving."
-        : "Chase it, or let it go.";
+        : context.subject === "calendar"
+          ? "Put it in your calendar, or let it go."
+          : "Chase it, or let it go.";
 
     return {
       verdict: "warn",
-      reason: `${noun} been waiting ${days} ${plural(days, "day")}. ${next}`,
+      reason: `${noun} ${elapsed}. ${next}`,
     };
   }
 }

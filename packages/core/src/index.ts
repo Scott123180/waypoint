@@ -186,6 +186,43 @@ export type {
 export { weekEnd } from "./weekly/iso-week";
 
 /**
+ * The daily shutdown: a composition of four readings taken at one moment.
+ *
+ * Additive only. It adds no file, no field, no decision point, and no policy
+ * value, and it cannot write: its dependencies are narrowed so that no write
+ * verb is reachable from it (009 FR-053). Every action the screen offers is a
+ * verb exported above, called by the client through the channel the ordinary
+ * surface uses — there is no shutdown-specific write path to export.
+ */
+export { ShutdownService } from "./shutdown/shutdown-service";
+export type {
+  ShutdownServiceDeps,
+  ProjectSource as ShutdownProjectSource,
+  TopThreeSource,
+  WaitingSource,
+} from "./shutdown/shutdown-service";
+export type {
+  ShutdownView,
+  Panel,
+  SourceFailure,
+  TopThreePanel,
+  MyProject,
+  StaleWaiting,
+  StaleCalendar,
+} from "./shutdown/types";
+
+/**
+ * `calendar.md`, read for the first time here.
+ *
+ * A parser and a type, and that is the whole of it. There is no writer, no
+ * appender, no line renderer, no ref, and no service — which is the strongest
+ * available form of "information only" (009 FR-031, FR-042). `calendarLine()`,
+ * the writer, stays in `vault/lists.ts` where sorting owns it.
+ */
+export { CALENDAR_PATH, readCalendar } from "./calendar/calendar-document";
+export type { CalendarItem } from "./calendar/types";
+
+/**
  * The intelligence layer.
  *
  * Two seams: `SplitProvider` and `DestinationProvider` say *what intelligence

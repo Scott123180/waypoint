@@ -25,6 +25,15 @@ export interface TrayActions {
   onTopThree: () => void;
   onReview: () => void;
   onRetrospective: () => void;
+  /**
+   * Opens the daily shutdown.
+   *
+   * **The only way that screen opens.** No schedule, no timer, no
+   * launch-on-open, no end-of-day trigger, and no prompt exists anywhere in the
+   * codebase to open it — a tool that decided when your day ended would be
+   * deciding something that is not its to decide (009 FR-006, FR-007).
+   */
+  onShutdown: () => void;
 }
 
 /**
@@ -53,6 +62,7 @@ export function createTray(actions: TrayActions): TrayHandle | undefined {
         { label: "Top three", click: actions.onTopThree },
         { label: "Weekly review", click: actions.onReview },
         { label: "Retrospective", click: actions.onRetrospective },
+        { label: "Daily shutdown", click: actions.onShutdown },
         { type: "separator" },
         { label: "Quit Waypoint", click: () => app.quit() },
       ]);

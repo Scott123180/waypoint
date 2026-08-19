@@ -916,6 +916,109 @@ const suggestApi = {
   },
 };
 
+/**
+ * The daily shutdown.
+ *
+ * A bridge in the strictest sense in this file: it forwards, and it decides
+ * nothing. It holds no threshold, no filter, no ordering, and no sentence about
+ * the user's data — every one of those arrives inside the `ShutdownView` that
+ * `read()` returns, already decided by the core.
+ *
+ * Note what is missing. There is no `onVaultChanged`, because this window
+ * subscribes to no change signal: membership is fixed when the screen opens
+ * (009 FR-010a, FR-011a). `onOpened` is not a substitute for one — it fires when
+ * the *user* opens the window, which is the moment a fresh reading is wanted,
+ * and never while they are reading (009 FR-010c).
+ *
+ * See specs/009-daily-shutdown/contracts/shutdown-api.md §4
+ */
+const shutdownApi = {
+  /** The whole screen, read at one moment. Never rejects. */
+  read(): Promise<unknown> {
+    return ipcRenderer.invoke("shutdown:read");
+  },
+
+  dismiss(): void {
+    ipcRenderer.send("shutdown:dismiss");
+  },
+
+  /**
+   * The window was opened. Re-read from cold.
+   *
+   * This window hides rather than closes, so without this a second opening
+   * would redisplay the first opening's answer. It carries no payload — it is a
+   * signal to re-read, not data.
+   */
+  onOpened(handler: () => void): void {
+    ipcRenderer.on("shutdown:opened", () => handler());
+  },
+
+  // -------------------------------------------------------------------------
+  // The five actions.
+  //
+  // Each forwards to the channel the ordinary surface already uses, so the
+  // shutdown cannot diverge from a validation, a refusal, a ledger write, or a
+  // policy consultation — it is not performing any of them (009 FR-037–FR-039).
+  // Three of these channels are shipped verbatim; the two waiting ones are new
+  // and named for the *verb* rather than for this screen, so any later surface
+  // uses the same ones.
+  // -------------------------------------------------------------------------
+
+  completeOutcome(ref: TopThreeRef): Promise<TopThreeResponse> {
+    return ipcRenderer.invoke("top-three:complete", ref);
+  },
+
+  completeMilestone(slug: string, ref: MilestoneRef): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:complete-milestone", slug, ref);
+  },
+
+  /** The projects window's own path. `expected` is what the row was shown as. */
+  setNextAction(slug: string, expected: string | null, next: string | null): Promise<ProjectResponse> {
+    return ipcRenderer.invoke("projects:set-field", slug, "next-action", expected, next);
+  },
+
+  recordFollowUp(ref: WaitingItemRef): Promise<WaitingResponse> {
+    return ipcRenderer.invoke("waiting:record-follow-up", ref);
+  },
+
+  recordReceived(ref: WaitingItemRef): Promise<WaitingResponse> {
+    return ipcRenderer.invoke("waiting:record-received", ref);
+  },
+
+  // -------------------------------------------------------------------------
+  // Capture, unchanged, on the existing channel.
+  //
+  // No new channel, no new service, and no change to `CaptureService`. The
+  // responsiveness budget and the non-blocking guarantee are properties of that
+  // service rather than of any surface, so they are inherited here rather than
+  // re-promised (009 FR-046) — and an item captured from this screen is
+  // indistinguishable from one captured anywhere else, because nothing about
+  // where it was typed crosses this bridge (009 FR-045).
+  //
+  // **There is deliberately no `undoCapture`.** Undo is scoped to *dictated*
+  // captures (001 FR-009, FR-018) and lives in the tray, not in any window —
+  // the capture box offers no undo affordance either. A typed capture from this
+  // screen is therefore undoable exactly as a typed capture from the box is,
+  // which is to say: it opens no undo window, and the tray entry stays disabled.
+  // That inheritance *is* 009 FR-049. A method here would be this screen
+  // offering something no other surface does (Principle VII).
+  // -------------------------------------------------------------------------
+
+  capture(text: string): Promise<SubmitResponse> {
+    return ipcRenderer.invoke("capture:submit", text, "typed");
+  },
+};
+
+/** An item's identity in `waiting.md`: position plus the exact block. */
+export interface WaitingItemRef {
+  index: number;
+  raw: string;
+}
+
+export type WaitingResponse =
+  | { ok: true; item: unknown }
+  | { ok: false; reason: string; message: string };
+
 contextBridge.exposeInMainWorld("waypoint", {
   ...api,
   sort: sortApi,
@@ -924,6 +1027,7 @@ contextBridge.exposeInMainWorld("waypoint", {
   topThree: topThreeApi,
   review: reviewApi,
   retrospective: retrospectiveApi,
+  shutdown: shutdownApi,
   ...(suggestAvailable ? { suggest: suggestApi } : {}),
 });
 
@@ -934,6 +1038,7 @@ export type WaypointApi = typeof api & {
   topThree: typeof topThreeApi;
   review: typeof reviewApi;
   retrospective: typeof retrospectiveApi;
+  shutdown: typeof shutdownApi;
   /** 008: absent when no transport is configured. Optional, so the renderer must check. */
   suggest?: typeof suggestApi;
 };
@@ -944,3 +1049,4 @@ export type WaypointAreasApi = typeof areasApi;
 export type WaypointTopThreeApi = typeof topThreeApi;
 export type WaypointReviewApi = typeof reviewApi;
 export type WaypointRetrospectiveApi = typeof retrospectiveApi;
+export type WaypointShutdownApi = typeof shutdownApi;

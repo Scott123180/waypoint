@@ -39,7 +39,12 @@ export interface WaitingItem {
 }
 
 /**
- * A line of `waiting.md` this feature's grammar cannot read.
+ * A line of a running list this feature's grammar cannot read.
+ *
+ * Widened from "a line of `waiting.md`" by Feature 9, which reads `calendar.md`
+ * with the same grammar and the same promise. One shape rather than two
+ * identical ones: a second copy would be free to drift, and the difference
+ * would show up as one surface numbering lines from zero.
  *
  * Carried rather than discarded so a surface can show it exactly as it reads
  * (FR-044). It has no owner and no date, so there is nothing to be stale about

@@ -63,6 +63,17 @@ export interface Harness {
   /** Opens the retrospective, as the tray entry does. Never opened for the user. */
   openRetrospective(): Promise<void>;
   retrospectiveView(): Promise<Page>;
+  /**
+   * Opens the daily shutdown, as the tray entry does.
+   *
+   * The only way that screen opens. Nothing schedules it, and nothing in the app
+   * opens it on the user's behalf (009 FR-006).
+   */
+  openShutdown(): Promise<void>;
+  /** Hides it, as closing the window does. Reopening reads again from cold. */
+  closeShutdown(): Promise<void>;
+  isShutdownVisible(): Promise<boolean>;
+  shutdownView(): Promise<Page>;
   /** Hides it, as closing the window does. Reopening re-reads from disk. */
   closeProjects(): Promise<void>;
   isProjectsVisible(): Promise<boolean>;
@@ -361,6 +372,38 @@ export async function launch(
         if (page.url().includes("retrospective.html")) return page;
       }
       return app.waitForEvent("window", (p) => p.url().includes("retrospective.html"));
+    },
+    async openShutdown() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].showShutdown();
+      });
+      const view = await harness.shutdownView();
+      // The first paint reads five files from disk asynchronously, so waiting on
+      // the date line rather than a fixed delay is what keeps this from racing.
+      // That line is present on every vault, including an empty one — which is
+      // itself a state worth being able to assert.
+      await view.waitForFunction(() => {
+        const el = document.getElementById("today");
+        return el !== null && (el.textContent ?? "").length > 0;
+      });
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async closeShutdown() {
+      await app.evaluate(() => {
+        (globalThis as Record<string, any>)["__waypoint"].hideShutdown();
+      });
+      await new Promise((r) => setTimeout(r, 150));
+    },
+    async isShutdownVisible() {
+      return app.evaluate(() => {
+        return (globalThis as Record<string, any>)["__waypoint"].isShutdownVisible();
+      });
+    },
+    async shutdownView() {
+      for (const page of app.windows()) {
+        if (page.url().includes("shutdown.html")) return page;
+      }
+      return app.waitForEvent("window", (p) => p.url().includes("shutdown.html"));
     },
     async reviewView() {
       for (const page of app.windows()) {

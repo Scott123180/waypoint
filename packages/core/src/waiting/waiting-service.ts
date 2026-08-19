@@ -61,6 +61,24 @@ export class WaitingService {
     return content === null ? [] : parseUnreadable(content);
   }
 
+  /**
+   * Both halves of the file, from **one** read (009 FR-011a).
+   *
+   * Additive beside `list()` and `unreadable()`, which keep their behaviour and
+   * their callers. It exists because those two each read `waiting.md`, and a
+   * surface that shows the items *and* the lines that would otherwise go
+   * missing would spend two reads on one file to get one answer.
+   *
+   * Not a replacement for either: migrating `ReviewService.waitingStep()` onto
+   * this would touch shipped, covered behaviour for no gain to the caller that
+   * needed it.
+   */
+  async read(): Promise<{ items: WaitingItem[]; unreadable: UnreadableLine[] }> {
+    const content = await this.vault.read(WAITING_PATH);
+    if (content === null) return { items: [], unreadable: [] };
+    return { items: parseWaiting(content), unreadable: parseUnreadable(content) };
+  }
+
   /** Chased. The item stays outstanding; its `since` is untouched (FR-041). */
   async recordFollowUp(ref: WaitingRef): Promise<WaitingOutcome> {
     return this.append(ref, "followed-up");
