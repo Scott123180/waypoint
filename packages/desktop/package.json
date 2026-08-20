@@ -1,6 +1,6 @@
 {
   "name": "@waypoint/desktop",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Electron thin client. Contains no domain logic.",
   "main": "dist/src/main/main.js",
