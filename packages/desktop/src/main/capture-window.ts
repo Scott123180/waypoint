@@ -47,12 +47,42 @@ export class CaptureWindow {
 
     void window.loadFile(join(__dirname, "..", "renderer", "index.html"));
 
-    // Reaching the box from a fullscreen app must not force a Space switch.
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    this.joinEverySpace(window);
 
     window.on("blur", () => this.blurred());
 
     this.window = window;
+  }
+
+  /**
+   * Pins the box to whichever Space (macOS desktop) the user is looking at.
+   *
+   * Without `CanJoinAllSpaces` the window belongs to the Space it was created
+   * on, and showing it makes macOS drag the user back there — so the hotkey
+   * answers on the desktop the app happened to start on rather than the one
+   * they are working in. `visibleOnFullScreen` is the same claim against a
+   * fullscreen app, which owns a Space of its own.
+   *
+   * Re-asserted on every open, not just at creation, because the membership is
+   * a property of the window's connection to the window server, and that is not
+   * ours alone to keep: `app.dock.hide()` transforms the process type, and a
+   * process transform is exactly the kind of event that drops it. One stale
+   * membership is enough to strand the box on the startup desktop for the rest
+   * of the session, and re-stating it costs a single call on a path that is
+   * already showing a window.
+   *
+   * `skipTransformProcessType` is what makes that repetition safe. Left to
+   * itself this call transforms the process between foreground and UIElement to
+   * make the fullscreen claim stick, hiding the window and flashing the dock
+   * each time. Waypoint is already a UIElement application — `main` hides the
+   * dock before this window exists — so the transform buys nothing and would be
+   * visible on every capture.
+   */
+  private joinEverySpace(window: BrowserWindow): void {
+    window.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true,
+    });
   }
 
   /**
@@ -87,6 +117,8 @@ export class CaptureWindow {
   show(mode: CaptureMode = "type"): void {
     const window = this.window;
     if (!window || window.isDestroyed()) return;
+
+    this.joinEverySpace(window);
 
     if (window.isVisible()) {
       // Brought forward, not reopened: nothing is reset, so a half-typed

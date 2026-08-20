@@ -282,6 +282,14 @@ async function start(): Promise<void> {
   // Writes made *from* it still reach every view above, because they go through
   // the same services and `FsVaultStore` raises the signal from its write path.
 
+  // No dock icon: this is a background agent summoned by hotkey or tray.
+  //
+  // Before any window exists, because hiding the dock transforms the process
+  // type, and a window created first would have to survive that transform with
+  // its "visible on every Space" membership intact — which is how the capture
+  // box ended up stranded on whichever desktop the app started on.
+  app.dock?.hide();
+
   captureWindow.create();
   registerIpc(service, captureWindow, sortService, () => sortWindow.hide(), () =>
     tray?.refresh(),
@@ -364,9 +372,6 @@ async function start(): Promise<void> {
   if (intelligenceConfig.kind === "problem") {
     emitNotice({ level: "error", message: intelligenceConfig.message });
   }
-
-  // No dock icon: this is a background agent summoned by hotkey or tray.
-  app.dock?.hide();
 
   app.on("activate", showCapture);
   app.on("second-instance", showCapture);
